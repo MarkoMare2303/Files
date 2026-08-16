@@ -27,7 +27,7 @@ export async function* readCsv(
     columns: (header: string[]) =>
       // BOM und Leerzeichen aus den Spaltennamen entfernen — beides kommt in
       // realen GTFS-Feeds vor.
-      header.map((name) => name.replace(/^﻿/, '').trim()),
+      header.map((name) => name.replace(/^\uFEFF/, '').trim()),
     skip_empty_lines: true,
     relax_column_count: true,
     trim: true,

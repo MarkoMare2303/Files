@@ -93,12 +93,18 @@ export interface ThemeColors {
   info: string;
   infoSubtle: string;
 
-  /** Offizielle Meldungen bekommen eine eigene, unverwechselbare Farbe (§7). */
+  /**
+   * Quellenkennzeichnung (§7). `official` und `community` müssen sich nicht
+   * nur im Farbton, sondern auch in der Helligkeit unterscheiden — sonst sind
+   * sie bei Farbfehlsichtigkeit nicht auseinanderzuhalten.
+   * `onOfficial`/`onCommunity` sind die zugehörigen Textfarben für Badges.
+   */
   official: string;
   officialSubtle: string;
-  /** Community-Meldungen. */
+  onOfficial: string;
   community: string;
   communitySubtle: string;
+  onCommunity: string;
 
   overlay: string;
   skeleton: string;
@@ -137,8 +143,10 @@ export const lightTheme: ThemeColors = {
 
   official: palette.brand[700],
   officialSubtle: palette.brand[50],
-  community: palette.signal[600],
+  onOfficial: '#FFFFFF',
+  community: palette.signal[700],
   communitySubtle: palette.signal[50],
+  onCommunity: '#FFFFFF',
 
   overlay: 'rgba(14, 17, 22, 0.45)',
   skeleton: palette.neutral[200],
@@ -175,10 +183,12 @@ export const darkTheme: ThemeColors = {
   info: palette.info[300],
   infoSubtle: '#122C38',
 
-  official: palette.brand[200],
+  official: palette.brand[100],
   officialSubtle: '#10293D',
-  community: palette.signal[300],
+  onOfficial: palette.brand[900],
+  community: palette.signal[400],
   communitySubtle: '#3A2109',
+  onCommunity: '#2A1405',
 
   overlay: 'rgba(0, 0, 0, 0.6)',
   skeleton: '#2A313C',

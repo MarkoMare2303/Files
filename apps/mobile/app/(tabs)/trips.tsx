@@ -38,8 +38,10 @@ export default function TripsScreen(): React.JSX.Element {
   useEffect(() => {
     if (!signedIn || activeTrip || detection.decision !== 'AUTO_SELECT' || !detection.best) return;
     void confirmTrip(detection.best, 'AUTO_GPS');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detection.decision, detection.best?.tripId, signedIn, activeTrip]);
+    // Absichtlich nur auf die Identität der erkannten Fahrt reagieren:
+    // `confirmTrip` ändert sich bei jedem Render, würde die Sitzung aber
+    // nicht erneut starten dürfen.
+  }, [detection.decision, detection.best, signedIn, activeTrip]);
 
   async function confirmTrip(
     candidate: TripCandidate,

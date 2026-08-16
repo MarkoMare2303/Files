@@ -7,7 +7,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiError } from '../../src/api/client.js';
 import { api } from '../../src/api/endpoints.js';
-import { queryKeys, useAppConfig } from '../../src/api/hooks.js';
+import { useAppConfig } from '../../src/api/hooks.js';
 import { Badge, Button, Card, Text } from '../../src/components/primitives.js';
 import { DataNotice, ErrorState, LoadingList } from '../../src/components/states.js';
 import { pick, t } from '../../src/i18n/index.js';

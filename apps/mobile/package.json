@@ -10,8 +10,8 @@
     "prebuild": "expo prebuild --clean",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src app --ext .ts,.tsx",
-    "test": "jest --passWithNoTests",
-    "test:unit": "jest --passWithNoTests",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run --passWithNoTests",
     "clean": "rm -rf .expo dist .turbo node_modules/.cache"
   },
   "dependencies": {
@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@types/react": "~18.3.12",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Neue Commits auf demselben Branch brechen laufende Läufe ab.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10'
+
+jobs:
+  quality:
+    name: Lint, Typecheck, Unit-Tests, Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Workspace-Pakete bauen
+        run: pnpm --filter "./packages/*" run build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit-Tests
+        run: pnpm test:unit
+
+      - name: Anwendungen bauen
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+
+  integration:
+    name: Integrationstests (PostgreSQL + PostGIS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: swissov
+          POSTGRES_PASSWORD: swissov
+          POSTGRES_DB: swissov_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U swissov -d swissov_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://swissov:swissov@localhost:5432/swissov_test
+      TEST_DATABASE_URL: postgresql://swissov:swissov@localhost:5432/swissov_test
+      API_INTERNAL_SECRET: ci-integration-secret-value-32-chars
+      API_CORS_ORIGINS: http://localhost:3000
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Workspace-Pakete bauen
+        run: pnpm --filter "./packages/*" run build
+
+      - name: Migrationen anwenden
+        run: pnpm db:migrate
+
+      - name: Prüfsummen der Migrationen verifizieren
+        run: pnpm db:migrate:status
+
+      - name: Stammdaten einspielen
+        run: pnpm db:seed
+
+      - name: Integrationstests
+        run: pnpm test:integration
+
+  security:
+    name: Security-Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Dependencies installieren
+        run: pnpm install --frozen-lockfile
+
+      - name: Bekannte Schwachstellen prüfen
+        # Moderate Funde blockieren nicht, hohe und kritische schon.
+        run: pnpm audit --audit-level high
+
+      - name: Auf versehentlich committete Secrets prüfen
+        run: node scripts/check-secrets.mjs
+
+      - name: Sicherstellen, dass keine .env-Datei eingecheckt ist
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env darf nicht eingecheckt werden"
+            exit 1
+          fi
+          echo "OK: keine .env im Repository"

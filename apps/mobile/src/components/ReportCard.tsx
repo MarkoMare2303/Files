@@ -53,7 +53,7 @@ function OfficialAlertCard({
       <View style={{ gap: theme.spacing.sm }}>
         <Badge
           label={t('common.official')}
-          color={theme.colors.textOnBrand}
+          color={theme.colors.onOfficial}
           background={theme.colors.official}
         />
         <Text variant="bodyStrong">{pick(item.header)}</Text>

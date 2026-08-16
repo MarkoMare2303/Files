@@ -84,7 +84,7 @@ describe('GTFS-CSV-Leser', () => {
   });
 
   it('entfernt ein BOM aus der Kopfzeile', async () => {
-    const withBom = `﻿${csv}`;
+    const withBom = `\uFEFF${csv}`;
     const rows = [];
     for await (const row of readCsv(Readable.from([withBom]))) rows.push(row);
     expect(rows[0]!.get('stop_id')).toBe('8503000');

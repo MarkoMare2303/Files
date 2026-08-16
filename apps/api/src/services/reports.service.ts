@@ -33,7 +33,7 @@ import { cacheKeys, type Cache } from '../lib/cache.js';
 import type { ConfigService } from './config.service.js';
 import type { ProfileRow } from './profiles.service.js';
 import type { RealtimeBroadcaster } from './realtime.service.js';
-import { toPgArray, type TransitService } from './transit.service.js';
+import type { TransitService } from './transit.service.js';
 
 export interface RequestMeta {
   ipHash: string | null;
@@ -557,7 +557,7 @@ export class ReportsService {
   // --- Lesen -----------------------------------------------------------------
 
   async byId(reportId: string, viewerId: string | null): Promise<Report | null> {
-    const { rows } = await this.db.query<ReportRow>(REPORT_SELECT + ' WHERE r.id = $2', [
+    const { rows } = await this.db.query<ReportRow>(`${REPORT_SELECT} WHERE r.id = $2`, [
       viewerId,
       reportId,
     ]);
