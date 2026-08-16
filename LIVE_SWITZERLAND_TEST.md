@@ -52,6 +52,42 @@ Für jede Fahrt ausfüllen. Ein Screenshot pro Zeile hilft bei der Auswertung.
 
 ---
 
+## Teil 0 — Der Ablauf am Stück (einmal vor allem anderen)
+
+Dieser Durchlauf entspricht dem gedachten Weg eines echten Nutzers. Er braucht **zwei
+Geräte** — nur so lässt sich prüfen, ob eine Meldung wirklich bei anderen ankommt.
+
+| Schritt | Aktion (Gerät A) | Erwartetes Ergebnis | ✓ |
+| --- | --- | --- | --- |
+| 0.1 | `https://<domain>` in Safari/Chrome öffnen | Landing-Page mit Quellenangabe | ☐ |
+| 0.2 | „App öffnen" | `/map`, Karte der Schweiz | ☐ |
+| 0.3 | Zum Home-Bildschirm hinzufügen, App von dort starten | Vollbild, keine Adressleiste | ☐ |
+| 0.4 | „Standort aktivieren" antippen | Systemdialog erscheint **erst jetzt** | ☐ |
+| 0.5 | Erlauben | Eigene Position auf der Karte | ☐ |
+| 0.6 | In den Zug einsteigen, „Fahrten" öffnen | „Standort wird verfolgt" | ☐ |
+| 0.7 | 2–4 Minuten fahren lassen | Erkennung liefert einen Vorschlag | ☐ |
+| 0.8 | Vorschlag prüfen | Linie und Ziel stimmen mit dem echten Zug überein | ☐ |
+| 0.9 | Bei Konfidenz ≥ 90 % | Fahrt wird **ohne Rückfrage** übernommen | ☐ |
+| 0.10 | Bei Konfidenz 70–89 % | „Bist du gerade hier unterwegs?" → bestätigen | ☐ |
+| 0.11 | Fahrt öffnen | Halteliste mit Zeiten, jede Zeile mit Quellen-Badge | ☐ |
+| 0.12 | Nächsten Halt mit der Anzeige im Zug vergleichen | Stimmt überein | ☐ |
+| 0.13 | „Melden" → Kategorie antippen | „Danke! Deine Meldung ist online." in unter 5 Sekunden | ☐ |
+| 0.14 | **Gerät B**: dieselbe Fahrt öffnen | Die Meldung erscheint **innerhalb von 60 Sekunden** | ☐ |
+| 0.15 | Gerät B: „Bestätigen" antippen | Zähler steigt sofort | ☐ |
+| 0.16 | Gerät A: Fahrt-Ansicht | Bestätigung ist auch hier sichtbar | ☐ |
+| 0.17 | Gerät A: Meldung prüfen | Trägt „Community-Meldung", nicht „Offizielle Meldung" | ☐ |
+| 0.18 | Am Ziel: „Fahrt beenden" | Sitzung endet, keine weitere Ortung | ☐ |
+
+**Zu 0.14:** Ohne Supabase-Realtime dauert es bis zu 60 Sekunden (regulärer
+Abruf-Intervall). Mit Realtime erscheint die Meldung nahezu sofort. Beides ist in Ordnung —
+länger als 60 Sekunden ist es nicht.
+
+**Wenn 0.8 einen falschen Zug zeigt:** Nicht bestätigen. Screenshot machen, Uhrzeit,
+tatsächliche Linie und vorgeschlagene Linie notieren. Das ist der wertvollste Fund
+dieses ganzen Tests.
+
+---
+
 ## Teil A — Fernverkehr (Pflicht)
 
 | # | Strecke | Worauf zu achten ist |

@@ -72,8 +72,15 @@ export default defineConfig({
   ],
 
   webServer: {
+    // Baut und startet die App selbst. Wichtig: `NEXT_PUBLIC_API_URL` muss zur
+    // BAUZEIT stimmen — Next.js ersetzt die Variable durch ein Literal. Ein
+    // Build mit einem anderen Wert lässt die API-Attrappe der Tests ins Leere
+    // laufen, und die datenabhängigen Szenarien scheitern scheinbar grundlos.
     command: `pnpm run build && pnpm run start -- -p ${PORT}`,
     url: BASE_URL,
+    // Lokal wird ein bereits laufender Server wiederverwendet. Wurde der mit
+    // anderen NEXT_PUBLIC_*-Werten gebaut, gilt derselbe Fallstrick — im
+    // Zweifel den Server beenden und Playwright selbst bauen lassen.
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     env: {

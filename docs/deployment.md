@@ -6,6 +6,7 @@
 |------------|----------|------------|
 | `apps/api` | Node 20+, zustandslos | horizontal |
 | `apps/worker` | Node 20+, zustandsbehaftet | **genau eine Instanz** |
+| `apps/web` | Next.js (Node) — **das ausgelieferte Produkt** | horizontal |
 | `apps/admin` | Next.js (Node oder Edge) | horizontal |
 | PostgreSQL + PostGIS | Supabase oder selbst betrieben | vertikal, Read Replicas möglich |
 | Redis | optional | – |
@@ -103,26 +104,93 @@ ALTER TABLE public.reports SET (autovacuum_vacuum_scale_factor = 0.05);
 Backups müssen vor allem `public` erfassen — `transit` lässt sich jederzeit
 durch einen Import wiederherstellen. Ein Restore ist regelmässig zu üben.
 
-## Mobile-App
+## Web-App (PWA) ausliefern
 
-Die App nutzt native Module (MapLibre, Location, Notifications) und läuft
-deshalb **nicht in Expo Go**:
+Die PWA ist eine gewöhnliche Next.js-Anwendung im Node-Modus. Sie braucht keinen
+Store, keine Signierung und keine Zertifikate — nur HTTPS.
+
+### Bauen und starten
 
 ```bash
-cd apps/mobile
-pnpm exec expo prebuild        # native Projekte erzeugen
-pnpm exec expo run:ios         # benötigt macOS + Xcode
-pnpm exec expo run:android     # benötigt Android SDK
+# Die öffentlichen Werte müssen zur BAUZEIT gesetzt sein: Next.js ersetzt
+# NEXT_PUBLIC_* durch Literale. Nachträgliches Setzen wirkt nicht.
+export NEXT_PUBLIC_API_URL=https://api.example.ch
+export NEXT_PUBLIC_SUPABASE_URL=https://<projekt>.supabase.co
+export NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+export NEXT_PUBLIC_MAP_TILE_URL=https://vectortiles.geo.admin.ch/styles/ch.swisstopo.basemap.vt/style.json
+
+pnpm install --frozen-lockfile
+pnpm --filter "./packages/*" run build
+pnpm --filter @swissov/web run build
+pnpm --filter @swissov/web start          # Port 3002, per WEB_PORT änderbar
 ```
 
-Für Store-Builds wird EAS verwendet. Erforderlich:
+### HTTPS ist Pflicht
 
-- **Apple**: Apple Developer Program (99 USD/Jahr), Bundle Identifier,
-  Push-Zertifikat, Sign-in-with-Apple-Konfiguration
-- **Google**: Play-Console-Konto (25 USD einmalig), Keystore, OAuth-Client-IDs
+Service Worker, `navigator.geolocation` und die Push-API sind ausserhalb von
+`localhost` an einen sicheren Kontext gebunden. Ohne gültiges Zertifikat ist die
+App keine PWA, sondern eine gewöhnliche Website — sie lässt sich nicht
+installieren, ortet nicht und empfängt keine Benachrichtigungen.
 
-Diese Credentials sind nicht Teil des Repositories und müssen vom Betreiber
-beschafft werden.
+### Reverse Proxy
+
+Zwei Regeln, alles andere ist Standard:
+
+```nginx
+# 1. Der Service Worker darf NIE aus einem Cache kommen — sonst bleibt eine
+#    fehlerhafte Version dauerhaft aktiv.
+location = /sw.js {
+    proxy_pass http://127.0.0.1:3002;
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+}
+
+# 2. Gehashte Build-Dateien dürfen dauerhaft gecacht werden.
+location /_next/static/ {
+    proxy_pass http://127.0.0.1:3002;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+}
+
+location / {
+    proxy_pass http://127.0.0.1:3002;
+}
+```
+
+Die App setzt ihre Sicherheits-Header selbst (`next.config.mjs`). Der Proxy soll
+sie durchreichen und nicht überschreiben.
+
+### CORS nicht vergessen
+
+Der Browser ist jetzt ein CORS-Client — anders als die native App. Ohne diesen
+Eintrag blockiert er jede API-Anfrage:
+
+```bash
+API_CORS_ORIGINS=https://app.example.ch
+```
+
+### Web Push einrichten
+
+```bash
+pnpm push:keys      # einmalig; Ausgabe in die Serverumgebung übernehmen
+```
+
+Der private Schlüssel gehört ausschliesslich in die Umgebung des **Workers**.
+Ein Wechsel macht alle bestehenden Abos ungültig.
+
+### Nach jedem Deployment
+
+Offene Sitzungen erhalten den Hinweis „Eine neue Version ist verfügbar." und
+laden erst auf Knopfdruck neu — ein automatischer Reload würde eine halb
+geschriebene Meldung verwerfen. Wird der Service Worker inhaltlich geändert,
+ist `VERSION` in `apps/web/public/sw.js` zu erhöhen, damit alte Caches
+aufgeräumt werden.
+
+## Native App (eingefroren)
+
+`apps/mobile` wird derzeit **nicht** gebaut und **nicht** veröffentlicht. EAS,
+TestFlight, App Store, Play Store, APNs-Zertifikate und Keystores sind damit
+kein Bestandteil des Betriebs mehr. Das Verzeichnis bleibt als Referenz im
+Repository, bis die PWA auf echten Geräten geprüft wurde (siehe
+`MOBILE_TO_WEB_MIGRATION.md`).
 
 ## Aktualisierung des Fahrplans
 

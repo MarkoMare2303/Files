@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useAuthBootstrap } from '../auth/useAuth';
 import { resolveLocale, setLocale } from '../i18n/index';
+import { startVitals } from '../observability/vitals';
 import { ensureAppleWebAppMeta } from '../pwa/appleWebAppMeta';
 import { startOfflineQueueWatcher } from '../state/offline-queue.store';
 import { useSessionStore } from '../state/session.store';
@@ -43,6 +44,7 @@ function Bootstrap({ children }: { children: React.ReactNode }): React.JSX.Eleme
   const setLocaleStore = useSessionStore((state) => state.setLocale);
   const storedLocale = useSessionStore((state) => state.locale);
   const ensureInstallId = useSessionStore((state) => state.ensureInstallId);
+  const analyticsConsent = useSessionStore((state) => state.settings?.analyticsConsent ?? false);
 
   // Sprache: gespeicherte Wahl schlägt Browsersprache.
   useEffect(() => {
@@ -57,6 +59,21 @@ function Bootstrap({ children }: { children: React.ReactNode }): React.JSX.Eleme
     ensureAppleWebAppMeta();
     return startOfflineQueueWatcher();
   }, [ensureInstallId]);
+
+  // Performance-Messung ausschliesslich mit ausdrücklicher Einwilligung (§23).
+  // Ohne Einwilligung wird nichts gesammelt und nichts gesendet.
+  useEffect(
+    () =>
+      startVitals(
+        (sample) => {
+          // Vorerst nur lokal sichtbar. Ein Versand an einen Dienst wäre eine
+          // eigene, dokumentierte Entscheidung — siehe observability/vitals.ts.
+          if (process.env.NODE_ENV === 'development') console.debug('[vitals]', sample);
+        },
+        { enabled: analyticsConsent },
+      ),
+    [analyticsConsent],
+  );
 
   return <>{children}</>;
 }
