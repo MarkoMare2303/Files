@@ -117,4 +117,10 @@ export interface ScoredCandidate {
     stopSequence: ComponentScore;
     realtimeCompatibility: ComponentScore;
   };
+  /**
+   * Multiplikativer Zeitfaktor (0..1), der auf die gewichtete Summe angewandt
+   * wurde. Werte unter 1 bedeuten: die Fahrt verkehrt zum Beobachtungszeitpunkt
+   * gar nicht. Siehe `scheduleWindowFactor()`.
+   */
+  windowFactor: number;
 }

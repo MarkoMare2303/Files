@@ -28,7 +28,11 @@
     "api:dev": "pnpm --filter @swissov/api run dev",
     "worker:dev": "pnpm --filter @swissov/worker run dev",
     "admin:dev": "pnpm --filter @swissov/admin run dev",
-    "mobile:dev": "pnpm --filter @swissov/mobile run start"
+    "mobile:dev": "pnpm --filter @swissov/mobile run start",
+    "web:dev": "pnpm --filter @swissov/web run dev",
+    "push:keys": "pnpm --filter @swissov/worker run push:keys",
+    "test:e2e": "pnpm --filter @swissov/web run test:e2e",
+    "gtfs:verify-production": "pnpm --filter @swissov/transit run verify:production"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -36,6 +40,7 @@
     "@typescript-eslint/parser": "^8.18.1",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3",

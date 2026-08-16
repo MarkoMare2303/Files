@@ -82,7 +82,25 @@ export const cacheEnvSchema = z.object({
   REDIS_URL: optionalNonEmpty,
 });
 
+/**
+ * Web Push (RFC 8030 / VAPID).
+ *
+ * Der ÖFFENTLICHE Schlüssel wird über `GET /v1/app-config` an den Browser
+ * ausgeliefert — das ist vorgesehen und unbedenklich. Der PRIVATE Schlüssel
+ * darf ausschliesslich im Worker-Prozess existieren und niemals in einer
+ * `NEXT_PUBLIC_*`-Variable, in einem Bundle oder in einem Log auftauchen.
+ *
+ * Schlüsselpaar erzeugen:  pnpm --filter @swissov/worker run push:keys
+ */
+const webPushEnvSchema = z.object({
+  WEB_PUSH_VAPID_PUBLIC_KEY: optionalNonEmpty,
+  WEB_PUSH_VAPID_PRIVATE_KEY: optionalNonEmpty,
+  /** `mailto:`- oder `https:`-Adresse; Push-Dienste verlangen einen Kontakt. */
+  WEB_PUSH_SUBJECT: optionalNonEmpty,
+});
+
 export const apiEnvSchema = baseEnvSchema
+  .merge(webPushEnvSchema)
   .merge(databaseEnvSchema)
   .merge(supabaseEnvSchema)
   .merge(transitEnvSchema)
@@ -127,6 +145,7 @@ export const apiEnvSchema = baseEnvSchema
 export type ApiEnv = z.infer<typeof apiEnvSchema>;
 
 export const workerEnvSchema = baseEnvSchema
+  .merge(webPushEnvSchema)
   .merge(databaseEnvSchema)
   .merge(supabaseEnvSchema)
   .merge(transitEnvSchema)
@@ -134,7 +153,13 @@ export const workerEnvSchema = baseEnvSchema
   .extend({
     WORKER_PORT: z.coerce.number().int().min(1).max(65_535).default(3002),
     PUSH_ENABLED: booleanish.default(true),
+    /**
+     * Veraltet: nur für Altbestände der nativen App. Der Web-Push-Versand
+     * verwendet ausschliesslich die VAPID-Schlüssel.
+     */
     EXPO_ACCESS_TOKEN: optionalNonEmpty,
+    /** Wie oft die Push-Warteschlange abgearbeitet wird. */
+    PUSH_JOB_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(600).default(20),
     /** Wie oft abgelaufene Meldungen aufgeräumt werden. */
     EXPIRY_JOB_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
     /** Wie oft der GTFS-Static-Import geprüft wird (Cron-Ausdruck). */
@@ -183,6 +208,8 @@ export function detectMissingIntegrations(env: {
   OPENTRANSPORTDATA_API_KEY?: string | undefined;
   OJP_API_KEY?: string | undefined;
   REDIS_URL?: string | undefined;
+  WEB_PUSH_VAPID_PUBLIC_KEY?: string | undefined;
+  WEB_PUSH_VAPID_PRIVATE_KEY?: string | undefined;
 }): string[] {
   const missing: string[] = [];
   if (!env.SUPABASE_URL) missing.push('SUPABASE_URL (Realtime-Broadcast & Admin-Auth deaktiviert)');
@@ -194,5 +221,7 @@ export function detectMissingIntegrations(env: {
     missing.push('OPENTRANSPORTDATA_API_KEY (GTFS-RT & offizielle Störungen deaktiviert)');
   if (!env.OJP_API_KEY) missing.push('OJP_API_KEY (Verbindungssuche via OJP deaktiviert)');
   if (!env.REDIS_URL) missing.push('REDIS_URL (In-Memory-Cache statt Redis — nicht clusterfähig)');
+  if (!env.WEB_PUSH_VAPID_PUBLIC_KEY || !env.WEB_PUSH_VAPID_PRIVATE_KEY)
+    missing.push('WEB_PUSH_VAPID_PUBLIC_KEY/PRIVATE_KEY (Push-Benachrichtigungen deaktiviert)');
   return missing;
 }

@@ -96,16 +96,51 @@ export const createFavoriteSchema = z
   });
 export type CreateFavorite = z.infer<typeof createFavoriteSchema>;
 
+export const devicePlatformSchema = z.enum(['ios', 'android', 'web']);
+export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
+
 export const registerDeviceSchema = z.object({
   /** Stabile, app-generierte Installations-ID (kein Hardware-Identifier, §21/§23). */
   installId: uuidSchema,
-  platform: z.enum(['ios', 'android']),
+  platform: devicePlatformSchema,
   appVersion: z.string().max(32),
   osVersion: z.string().max(64).optional(),
-  /** Expo-Push-Token; optional, falls Push abgelehnt wurde. */
+  /**
+   * Veraltet: Expo-Push-Token der nativen App. Die PWA registriert ihr
+   * Push-Abo über `POST /v1/me/push-subscriptions`.
+   */
   pushToken: z.string().max(256).optional(),
 });
 export type RegisterDevice = z.infer<typeof registerDeviceSchema>;
+
+/**
+ * Web-Push-Abo (RFC 8030 / RFC 8291), wie `PushSubscription.toJSON()` es
+ * liefert.
+ *
+ * `p256dh` und `auth` sind Schlüssel des BROWSERS, nicht des Servers: sie
+ * verschlüsseln die Nutzlast Ende-zu-Ende. Ohne sie könnte der Push-Dienst
+ * (Google, Mozilla, Apple) den Inhalt mitlesen.
+ */
+export const webPushSubscriptionSchema = z.object({
+  // Der Endpunkt ist eine vom Browser vergebene HTTPS-URL. Längenobergrenze
+  // grosszügig, weil FCM-Endpunkte lang sind.
+  endpoint: z.string().url().max(2048),
+  keys: z.object({
+    p256dh: z.string().min(20).max(256),
+    auth: z.string().min(8).max(64),
+  }),
+  /** Millisekunden-Zeitstempel; die meisten Browser liefern `null`. */
+  expirationTime: z.number().int().nullable().optional(),
+});
+export type WebPushSubscription = z.infer<typeof webPushSubscriptionSchema>;
+
+export const registerPushSubscriptionSchema = z.object({
+  installId: uuidSchema,
+  subscription: webPushSubscriptionSchema,
+  /** Grobe Browserkennung zur Einordnung von Zustellfehlern (§23). */
+  userAgent: z.string().max(200).optional(),
+});
+export type RegisterPushSubscription = z.infer<typeof registerPushSubscriptionSchema>;
 
 /** DSGVO/DSG-Datenexport (§23). */
 export const dataExportSchema = z.object({

@@ -1,6 +1,6 @@
 # Schweizer ÖV Live — Community App
 
-Eine Mobile-App für den öffentlichen Verkehr in der ganzen Schweiz: offizielle
+Eine **Progressive Web App** für den öffentlichen Verkehr in der ganzen Schweiz: offizielle
 Fahrplan- und Echtzeitdaten, eine Live-Karte, automatische Erkennung der Fahrt,
 in der man gerade sitzt, und Community-Meldungen von Fahrgast zu Fahrgast.
 
@@ -10,6 +10,12 @@ Schiff, Standseilbahn und Luftseilbahn.
 
 **Offizielle Meldungen und Community-Meldungen werden konsequent getrennt** —
 in der Datenbank, in der API und in der Oberfläche.
+
+Die App läuft im Browser und lässt sich auf iPhone und Android zum
+Home-Bildschirm hinzufügen. Eine native App wird derzeit **nicht**
+veröffentlicht — der Weg dorthin ist in
+[MOBILE_TO_WEB_MIGRATION.md](MOBILE_TO_WEB_MIGRATION.md) beschrieben.
+`apps/mobile` liegt noch im Repository, wird aber nicht mehr ausgeliefert.
 
 ---
 
@@ -23,7 +29,7 @@ in der Datenbank, in der API und in der Oberfläche.
 - [Migrationen](#6-migrationen)
 - [GTFS importieren](#7-gtfs-importieren)
 - [Backend starten](#8-backend-starten)
-- [Mobile-App starten](#9-mobile-app-starten)
+- [Web-App starten](#9-web-app-starten)
 - [Admin starten](#10-admin-starten)
 - [Tests ausführen](#11-tests-ausführen)
 - [Production Build](#12-production-build)
@@ -216,21 +222,30 @@ curl "http://localhost:3001/v1/stops/nearby?lat=47.3779&lon=8.5403&radius=500"
 
 ---
 
-## 9. Mobile-App starten
+## 9. Web-App starten
 
 ```bash
-cd apps/mobile
-pnpm exec expo prebuild      # einmalig: native Projekte erzeugen
-pnpm exec expo run:ios       # oder: run:android
+pnpm web:dev      # http://localhost:3002
 ```
 
-Danach genügt `pnpm mobile:dev` zum Starten des Dev-Servers.
+Die Landing-Page liegt auf `/`, die App selbst unter `/map`, `/trips`,
+`/report`, `/reports`, `/profile` und `/settings`.
 
-Läuft die API nicht auf `localhost` (etwa beim Test auf einem echten Gerät),
-muss `EXPO_PUBLIC_API_URL` in `.env` auf die IP des Entwicklungsrechners
-zeigen, zum Beispiel `http://192.168.1.42:3001`.
+Zum Testen auf einem echten Telefon muss `NEXT_PUBLIC_API_URL` in `.env` auf
+die IP des Entwicklungsrechners zeigen, zum Beispiel
+`http://192.168.1.42:3001`.
 
-> **Expo Go funktioniert nicht.** Karte, Standort und Push sind native Module.
+> **Service Worker, Standort und Push brauchen HTTPS.** Ausnahme ist
+> `localhost`. Auf einem echten Gerät im lokalen Netz funktioniert also
+> zunächst nur die Grundfunktion — für die vollständige PWA-Prüfung ist ein
+> HTTPS-Tunnel oder eine echte Domain nötig. Siehe
+> [docs/iphone-pwa-test.md](docs/iphone-pwa-test.md).
+
+Push-Benachrichtigungen brauchen ein VAPID-Schlüsselpaar:
+
+```bash
+pnpm push:keys      # erzeugt es und zeigt, was in .env gehört
+```
 
 ---
 
@@ -291,8 +306,17 @@ node apps/worker/dist/index.js
 pnpm --filter @swissov/admin start
 ```
 
-Mobile-Builds laufen über EAS und benötigen Apple- bzw. Google-Credentials —
-siehe `docs/deployment.md`.
+```bash
+pnpm --filter @swissov/web start     # PWA auf Port 3002
+```
+
+Vor dem Livegang: [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) und
+[SECURITY_AUDIT.md](SECURITY_AUDIT.md) durchgehen. Die externen Datenquellen
+lassen sich vorab prüfen:
+
+```bash
+pnpm gtfs:verify-production
+```
 
 ---
 
@@ -303,7 +327,8 @@ apps/
   api/        Fastify-REST-API, OpenAPI, Auth, Trip-Matching, Moderation
   worker/     GTFS-Import, GTFS-RT-Poller, Push, Ablauf, Aufbewahrung
   admin/      Next.js Admin-Portal
-  mobile/     Expo / React Native / Expo Router
+  web/        Next.js PWA — das ausgelieferte Produkt
+  mobile/     Expo / React Native (eingefroren, wird nicht ausgeliefert)
 
 packages/
   types/      Zod-Schemas als API-Vertrag
@@ -330,6 +355,11 @@ scripts/         Hilfsskripte
 | [docs/privacy-architecture.md](docs/privacy-architecture.md) | Datenschutz, Aufbewahrung, offene Rechtsfragen |
 | [docs/moderation.md](docs/moderation.md) | Moderation, Trust Score, Reputation |
 | [docs/deployment.md](docs/deployment.md) | Betrieb, Überwachung, CI/CD |
+| [docs/iphone-pwa-test.md](docs/iphone-pwa-test.md) | PWA-Prüfung auf dem iPhone |
+| [MOBILE_TO_WEB_MIGRATION.md](MOBILE_TO_WEB_MIGRATION.md) | Migration der nativen App zur PWA |
+| [SECURITY_AUDIT.md](SECURITY_AUDIT.md) | Sicherheitsaudit mit Findings und Status |
+| [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) | Was bis zum Livegang fehlt |
+| [LIVE_SWITZERLAND_TEST.md](LIVE_SWITZERLAND_TEST.md) | Prüfplan für den echten Betrieb |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Technischer Plan und Risiken |
 | [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Was fertig ist und was fehlt |
 

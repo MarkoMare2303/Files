@@ -6,7 +6,7 @@
  */
 
 export interface HttpRequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'HEAD';
   headers?: Record<string, string>;
   body?: string | Uint8Array;
   /** Timeout einer einzelnen Anfrage in Millisekunden. */

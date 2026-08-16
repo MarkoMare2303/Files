@@ -41,5 +41,22 @@ module.exports = {
       files: ['**/*.test.ts', '**/*.test.tsx', '**/__tests__/**', '**/fixtures/**'],
       rules: { '@typescript-eslint/no-explicit-any': 'off' },
     },
+    {
+      // React-Oberflächen (Web-PWA, Admin-Portal). Die Hook-Regeln fangen
+      // genau die Fehler ab, die man erst in Produktion bemerkt: fehlende
+      // Abhängigkeiten in Effekten und bedingt aufgerufene Hooks.
+      files: ['apps/web/**/*.{ts,tsx}', 'apps/admin/**/*.{ts,tsx}'],
+      plugins: ['react-hooks'],
+      env: { browser: true },
+      rules: {
+        'react-hooks/rules-of-hooks': 'error',
+        'react-hooks/exhaustive-deps': 'warn',
+      },
+    },
+    {
+      // Service Worker: eigene globale Umgebung, kein DOM.
+      files: ['apps/web/public/sw.js'],
+      env: { serviceworker: true, browser: true },
+    },
   ],
 };

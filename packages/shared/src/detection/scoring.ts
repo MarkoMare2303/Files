@@ -320,6 +320,52 @@ export function scoreRealtime(candidate: Candidate, latest: Observation): Compon
   return component(raw, weight, parts.join(', ') || 'Echtzeitdaten vorhanden');
 }
 
+/**
+ * Zeitliches Ausschlusskriterium — multiplikativ, nicht additiv.
+ *
+ * Warum eine Sonderbehandlung für die Zeit? Weil sie kein Indiz unter sechs
+ * ist, sondern eine Vorbedingung: Eine Fahrt, die vor einer Stunde in Basel
+ * angekommen ist, kann nicht die Fahrt sein, in der jemand gerade sitzt —
+ * ganz gleich, wie perfekt die Position zur Strecke passt.
+ *
+ * Genau dieser Fall wurde in den Szenariotests sichtbar (`scenarios.test.ts`,
+ * „Beobachtung eine Stunde nach Ankunft"): Wer auf der Bahnlinie steht,
+ * sammelte aus Streckennähe, Richtung und Geschwindigkeit genug Punkte, um
+ * mit 0.70 über die Bestätigungsschwelle zu kommen — obwohl der Zug längst
+ * weg war. Das additive Gewicht der Zeit (25 %) reicht dagegen nicht aus.
+ *
+ * Die Kurve ist bewusst weich: innerhalb des Fahrtfensters plus Karenz gilt 1,
+ * danach fällt der Faktor über 20 Minuten linear auf einen Restwert. Der
+ * Restwert ist nicht 0, damit eine grob falsche Uhrzeit auf dem Gerät oder ein
+ * Feed mit verschobenen Betriebstagen die Fahrt nicht komplett unsichtbar
+ * macht — sie landet dann in der Auswahlliste statt in der Auto-Übernahme.
+ */
+export const WINDOW_DECAY_MS = 20 * 60 * 1000;
+export const WINDOW_FLOOR = 0.15;
+
+/**
+ * Obergrenze für Fahrten, die der Betrieb als ausgefallen meldet.
+ *
+ * Liegt bewusst zwischen Bestätigungs- (0.70) und Auto-Schwelle (0.90): die
+ * Fahrt wird vorgeschlagen und kann bestätigt werden, aber nie stillschweigend
+ * übernommen.
+ */
+export const CANCELLED_CONFIDENCE_CAP = 0.85;
+
+export function scheduleWindowFactor(candidate: Candidate, latest: Observation): number {
+  const now = latest.timestamp.getTime();
+  const delayMs = Math.max(0, (candidate.realtime?.delaySeconds ?? 0) * 1000);
+  // Dieselben Karenzzeiten wie in `scoreTimeCompatibility` — die Fahrt darf
+  // kurz vor Abfahrt am Bahnsteig und kurz nach Ankunft noch zählen.
+  const start = candidate.scheduledStart.getTime() - 5 * 60 * 1000;
+  const end = candidate.scheduledEnd.getTime() + delayMs + 10 * 60 * 1000;
+
+  if (now >= start && now <= end) return 1;
+
+  const excess = now < start ? start - now : now - end;
+  return clamp(1 - excess / WINDOW_DECAY_MS, WINDOW_FLOOR, 1);
+}
+
 /** Bewertet eine einzelne Kandidatenfahrt. */
 export function scoreCandidate(
   candidate: Candidate,
@@ -359,13 +405,27 @@ export function scoreCandidate(
   for (const c of components) c.weighted = c.raw * c.weight;
 
   const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
-  const confidence = totalWeight > 0
+  const weighted = totalWeight > 0
     ? clamp(components.reduce((sum, c) => sum + c.weighted, 0) / totalWeight, 0, 1)
     : 0;
+
+  // Zeitliches Ausschlusskriterium zuletzt anwenden (siehe oben).
+  const windowFactor = scheduleWindowFactor(candidate, latest);
+  let confidence = clamp(weighted * windowFactor, 0, 1);
+
+  // Meldet der Betrieb die Fahrt als ausgefallen, wird sie nie automatisch
+  // übernommen. Der Abzug im Echtzeit-Teilscore (10 % Gewicht) reicht dafür
+  // nicht: eine geometrisch perfekte Fahrt erreichte damit weiterhin 0.90.
+  // Die Fahrt bleibt aber wählbar — Ersatzverkehr und kurzfristig doch
+  // verkehrende Züge gibt es wirklich; nur fragen muss man dann.
+  if (candidate.realtime?.cancelled) {
+    confidence = Math.min(confidence, CANCELLED_CONFIDENCE_CAP);
+  }
 
   return {
     candidate,
     confidence: Math.round(confidence * 1000) / 1000,
+    windowFactor,
     breakdown: {
       shapeDistance,
       timeCompatibility,

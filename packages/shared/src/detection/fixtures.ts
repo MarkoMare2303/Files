@@ -33,7 +33,17 @@ export const FIXTURE_STOPS = {
   thusis: { stopId: '8509197', name: 'Thusis', lat: 46.6975, lon: 9.4405 },
 } as const;
 
-export type FixtureStop = (typeof FIXTURE_STOPS)[keyof typeof FIXTURE_STOPS];
+/**
+ * Bewusst strukturell und nicht als Union der Werte von `FIXTURE_STOPS`:
+ * Erweiterte Szenarien (`scenarios.ts`) bringen eigene Haltestellen mit, die
+ * sonst nicht zuweisbar wären.
+ */
+export interface FixtureStop {
+  readonly stopId: string;
+  readonly name: string;
+  readonly lat: number;
+  readonly lon: number;
+}
 
 /** Erzeugt eine Linie mit Zwischenpunkten zwischen den Halten. */
 export function buildShape(stops: readonly FixtureStop[], pointsPerSegment = 6) {

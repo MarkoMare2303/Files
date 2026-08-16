@@ -52,7 +52,11 @@ export const palette = {
     950: '#0E1116',
   },
   success: { 100: '#DFF3E6', 300: '#7FCB9C', 500: '#1F9D55', 700: '#146B3A' },
-  warning: { 100: '#FBF0D8', 300: '#EDC66B', 500: '#E0A32E', 700: '#9B6F17' },
+  // Der 700er-Schritt war ursprünglich #9B6F17 und damit deutlich heller als
+  // die 700er-Schritte von success/danger. Als Textfarbe erreichte er nur
+  // 4.49:1 auf Weiss — haarscharf an der AA-Grenze. Jetzt konsistent zur
+  // übrigen Rampe und mit Reserve (5.4:1 auf Weiss, 4.8:1 auf warningSubtle).
+  warning: { 100: '#FBF0D8', 300: '#EDC66B', 500: '#E0A32E', 700: '#8A6314' },
   danger: { 100: '#FBE3E5', 300: '#EC9AA1', 500: '#C6303C', 700: '#8A1F28' },
   info: { 100: '#E1F0F6', 300: '#8FC6DC', 500: '#3B8FB4', 700: '#256179' },
 } as const;
@@ -134,7 +138,11 @@ export const lightTheme: ThemeColors = {
 
   success: palette.success[500],
   successSubtle: palette.success[100],
-  warning: palette.warning[500],
+  // Bewusst der 700er-Schritt, nicht der 500er: Warnfarben werden als TEXT
+  // verwendet (Verspätungshinweise, Datenhinweise). #E0A32E erreicht auf Weiss
+  // nur 2.2:1 und auf `warningSubtle` nur 2.0:1 — unlesbar. Gefunden durch den
+  // Kontrasttest in `apps/web/src/components/source-badge.test.ts`.
+  warning: palette.warning[700],
   warningSubtle: palette.warning[100],
   danger: palette.danger[500],
   dangerSubtle: palette.danger[100],

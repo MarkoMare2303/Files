@@ -1,12 +1,17 @@
 # IMPLEMENTATION_STATUS.md
 
-Stand nach der Erstimplementierung. Legende:
+**Stand: nach der Migration zur Progressive Web App (2026-08-16).**
+
+Das Produkt wird als PWA ausgeliefert; eine native App wird derzeit nicht
+veröffentlicht. Der vollständige Abgleich Feature für Feature steht in
+[MOBILE_TO_WEB_MIGRATION.md](MOBILE_TO_WEB_MIGRATION.md).
+
+Legende:
 
 - ✅ **vollständig implementiert** — Code vorhanden, gebaut, getestet
 - ⚠️ **benötigt externen API-Key** — vollständig implementiert, aber ohne
   Credentials inaktiv
-- ⚠️ **benötigt Apple/Google Developer Credentials** — Code vorhanden, Build
-  bzw. Ausführung braucht kostenpflichtige Konten
+- 🧊 **eingefroren** — vorhanden, wird aber nicht ausgeliefert
 - ❌ **noch nicht implementiert**
 
 ## Verifizierter Zustand
@@ -15,12 +20,13 @@ Alle folgenden Befehle wurden ausgeführt und laufen fehlerfrei durch:
 
 | Prüfung | Ergebnis |
 |---------|----------|
-| `pnpm lint` | ✅ 10/10 Aufgaben ohne Befund |
-| `pnpm typecheck` | ✅ 16/16 Aufgaben ohne Fehler |
-| `pnpm test:unit` | ✅ **213 Tests** in 7 Paketen |
-| `pnpm test:integration` | ✅ **54 Tests** gegen echtes PostgreSQL/PostGIS |
-| `pnpm build` | ✅ 9/9 Aufgaben (Pakete, API, Worker, Admin) |
-| `pnpm db:migrate` | ✅ 9 Migrationen angewendet |
+| `pnpm lint` | ✅ 11/11 Aufgaben ohne Befund |
+| `pnpm typecheck` | ✅ 17/17 Aufgaben ohne Fehler |
+| `pnpm test` | ✅ **482 Tests** in 10 Paketen |
+| `pnpm test:integration` | ✅ **53 Tests** gegen echtes PostgreSQL/PostGIS |
+| `pnpm --filter @swissov/web run test:e2e` | ✅ **29 Szenarien** gegen den Produktions-Build (Chromium verifiziert) |
+| `pnpm build` | ✅ 10/10 Aufgaben (Pakete, API, Worker, Admin, Web) |
+| `pnpm db:migrate` | ✅ 10 Migrationen angewendet |
 | `pnpm db:seed` | ✅ 29 Kategorien, 6 Feature-Flags, 4 Konfigurationsblöcke |
 | `node scripts/check-secrets.mjs` | ✅ keine Zugangsdaten im Repository |
 | `pnpm gtfs:import` | ✅ vollständiger Durchlauf gegen ein echtes GTFS-ZIP (siehe unten) |
@@ -140,27 +146,39 @@ dieser Umgebung verfügbar).
 
 ---
 
-## Mobile-App
+## Web-App (PWA) — das ausgelieferte Produkt
 
-| Funktion | Status | Anmerkung |
-|----------|--------|-----------|
-| Onboarding (3 Screens) + Standort-Erklärung vor der Abfrage | ✅ | |
-| Bottom Navigation mit hervorgehobenem Melden-Button | ✅ | |
-| Karte mit Position, Haltestellen, Meldungen, Ebenen | ✅ | Benötigt Karten-Style-URL (Vorgabe: swisstopo, frei) |
-| Fahrten-Tab mit Erkennung, Bestätigung, manueller Auswahl | ✅ | |
-| Trip Screen mit nächstem Halt, Verspätung, Fortschritt, Haltefolge | ✅ | |
-| Melden-Flow (ein Tap; Freitext per Long-Press) | ✅ | |
-| Meldungen-Tab, Haltestellenansicht, Suche | ✅ | |
-| Profil und Einstellungen inkl. Einwilligungen | ✅ | |
-| Datenexport und Kontolöschung in der App | ✅ | |
-| Design System, Dark Mode, Barrierefreiheit | ✅ | Kontraste automatisiert geprüft |
-| i18n-Architektur, Deutsch vollständig | ✅ | fr/it/en als Teilübersetzung mit Fallback |
-| Offline-Verhalten (Cache, Queue, Hinweise) | ✅ | |
-| **Nativer Build (iOS/Android)** | ⚠️ | Benötigt Apple Developer Program bzw. Google Play Console |
-| **Anmeldung mit Apple/Google** | ⚠️ | Supabase-Anbindung implementiert; die nativen SDK-Aufrufe brauchen `APPLE_CLIENT_ID`/`GOOGLE_CLIENT_ID` und einen Development Build |
-| Push-Empfang | ⚠️ | Serverseitiger Versand implementiert; Empfang braucht nativen Build und Push-Zertifikate |
+| Bereich | Status |
+|---------|--------|
+| Next.js App Router, 16 Routen | ✅ |
+| Landing-Page auf `/`, App auf `/map`, `/trips`, `/report`, `/reports`, `/profile`, `/settings` | ✅ |
+| Karte mit MapLibre GL JS (keine erfundenen Fahrzeugpositionen) | ✅ |
+| Fahrtenerkennung mit Browser-Geolocation | ✅ |
+| Melden in unter fünf Sekunden, ein Griff | ✅ |
+| Offline-Warteschlange in IndexedDB, TTL-Prüfung vor dem Upload | ✅ |
+| Quellen-Badges OFFIZIELL / COMMUNITY / LIVE / FAHRPLAN / GESCHÄTZT | ✅ |
+| Web-App-Manifest, Icons (192/512/maskable/Apple-Touch), Shortcuts | ✅ |
+| Service Worker mit versionierten Caches, Offline-Seite, Update-Hinweis | ✅ |
+| Installations-UX: Android-Prompt, iOS-Anleitung, 14 Tage Ruhe nach Wegklicken | ✅ |
+| Web Push (VAPID) mit Deep-Links auf `/trip/…` und `/reports/…` | ⚠️ benötigt VAPID-Schlüsselpaar (`pnpm push:keys`) |
+| Anmeldung per Magic Link und OAuth, Callback-Route | ⚠️ benötigt Supabase |
+| Vier Sprachen, Dunkelmodus, WCAG-AA-Kontraste, Safe-Area | ✅ |
+| Sicherheits-Header (CSP, HSTS, Permissions-Policy, Referrer-Policy) | ✅ |
+| Keine vorgetäuschte Hintergrundortung | ✅ (bewusst) |
 
----
+**Nicht möglich im Browser** — und deshalb nicht implementiert, sondern erklärt:
+Hintergrundortung, Push im iOS-Safari-Tab (nur installiert), Vibration auf iOS.
+
+## Native App (eingefroren)
+
+| Bereich | Status |
+|---------|--------|
+| `apps/mobile` (Expo, 35 Dateien) | 🧊 eingefroren — bleibt als Referenz im Repository |
+| EAS-Build, TestFlight, App Store, Play Store | ❌ nicht im Umfang |
+| APNs-/FCM-Zertifikate | ❌ entfällt — Web Push braucht nur VAPID |
+
+Entfernt wird `apps/mobile` erst, wenn alle Zeilen in
+`MOBILE_TO_WEB_MIGRATION.md` abgehakt sind.
 
 ## Admin-Portal
 
@@ -197,13 +215,14 @@ dieser Umgebung verfügbar).
 
 | Punkt | Status | Begründung |
 |-------|--------|------------|
-| Ende-zu-Ende-Tests auf Geräten (Detox/Maestro) | ❌ | Benötigt nativen Build und damit Apple-/Google-Credentials. Die geforderten Abläufe sind über Integrationstests der API abgedeckt: Anmeldung, Fahrt erkennen, bestätigen, melden, sehen, bestätigen, melden, Konto löschen |
+| Ende-zu-Ende-Tests | ✅ | 29 Playwright-Szenarien gegen den Produktions-Build. Chromium hier verifiziert; WebKit und Firefox laufen in CI (`pnpm --filter @swissov/web run test:e2e:install`) |
 | Vollwertiger Routenplaner ohne OJP (RAPTOR/CSA) | ❌ | Bewusste Entscheidung: OJP ist die vorgesehene Quelle. Ohne Zugang werden Direktverbindungen geliefert und die Einschränkung ausgewiesen |
-| Push-Empfang und -Anzeige in der App | ❌ | Serverseitig vollständig; die Empfangsseite braucht einen nativen Build |
+| Push-Empfang und -Anzeige | ✅ | Web Push vollständig: Service Worker zeigt an, `notificationclick` öffnet den Deep-Link. Echte Zustellung braucht ein VAPID-Paar und ein Gerät — Prüfplan in `docs/iphone-pwa-test.md` |
 | Sentry-/OTLP-Anbindung | ❌ | Adapter und Konfigurationsvariablen vorhanden; die konkrete Integration hängt vom gewählten Anbieter ab |
 | Leader Election für den Worker | ❌ | Aktuell muss genau eine Instanz laufen (dokumentiert) |
 | Deployment-Pipeline | ❌ | CI prüft und baut; ein Deploy-Job fehlt, weil die Zielplattform nicht festgelegt ist |
-| App-Icons und Splash-Assets | ❌ | `assets/icon.png` ist in `app.config.ts` referenziert, aber nicht enthalten — vor dem ersten nativen Build zu ergänzen |
+| App-Icons | ✅ | Aus den Design-Tokens erzeugt: `pnpm --filter @swissov/web run icons` (192, 512, maskable, Apple-Touch, Favicon, Badge) |
+| Import des ECHTEN Schweizer Fahrplans | ❌ | Diese Umgebung erhält von `opentransportdata.swiss` HTTP 403. Netzwerkrichtlinien wurden nicht umgangen. Prüfwerkzeug für den Betreiber: `pnpm gtfs:verify-production` |
 | Juristische Prüfung | ❌ | Alle Punkte sind in `docs/privacy-architecture.md` mit **[JURISTISCH PRÜFEN]** markiert |
 
 ---
@@ -215,9 +234,9 @@ dieser Umgebung verfügbar).
 | `OPENTRANSPORTDATA_API_KEY` | kostenlos | Verspätungen, Ausfälle, offizielle Störungen | Nur Fahrplanzeiten; die App weist darauf hin |
 | `OJP_API_KEY` | kostenlos | Verbindungen mit Umstieg | Nur Direktverbindungen; Einschränkung wird angezeigt |
 | Supabase-Projekt | kostenlose Stufe genügt zum Start | Anmeldung, Realtime, Admin-Portal | Gastmodus: alles lesen, nichts melden |
-| Apple Developer Program | 99 USD/Jahr | iOS-Build, Sign in with Apple, Push | Kein iOS-Build |
-| Google Play Console | 25 USD einmalig | Android-Veröffentlichung, Google-Anmeldung | Kein Play-Store-Release |
-| `EXPO_ACCESS_TOKEN` | kostenlos | Höhere Push-Rate-Limits | Push funktioniert, mit strengeren Limits |
+| `WEB_PUSH_VAPID_*` | kostenlos, selbst erzeugt (`pnpm push:keys`) | Web Push auf allen Plattformen | Der Schalter erscheint gar nicht erst, mit Begründung |
+| Apple Developer Program | — | **nicht mehr nötig** | Web Push braucht kein APNs-Zertifikat |
+| Google Play Console | — | **nicht mehr nötig** | Kein Store-Release geplant |
 | Karten-Tiles | swisstopo frei | Kartenhintergrund | Vorgabe funktioniert ohne Key |
 
 ---
@@ -226,7 +245,9 @@ dieser Umgebung verfügbar).
 
 | Kriterium | Status |
 |-----------|--------|
-| Mobile-App kompiliert (Typecheck, Bundle-Konfiguration) | ✅ |
+| Web-App baut (`next build`, 16 Routen) | ✅ |
+| PWA installierbar (Manifest, Icons, Service Worker) | ✅ E2E-getestet |
+| Offline-Start funktioniert | ✅ E2E-getestet |
 | Backend kompiliert | ✅ |
 | Admin kompiliert (`next build`) | ✅ |
 | Datenbankmigrationen funktionieren | ✅ |
@@ -239,7 +260,9 @@ dieser Umgebung verfügbar).
 | Voting funktioniert | ✅ |
 | Automatische Expiration funktioniert | ✅ |
 | Spam Protection vorhanden | ✅ |
-| Push-Infrastruktur vorhanden | ✅ Versand; Empfang braucht nativen Build |
+| Push-Infrastruktur vorhanden | ✅ Versand (Web Push/VAPID) und Empfang (Service Worker) implementiert und getestet |
+| Fahrtenerkennung gegen Falsch-Positive gehärtet | ✅ 135 Szenarien, darunter Auto parallel zur Bahnlinie |
+| Sicherheitsaudit ohne offene Critical/High | ✅ `SECURITY_AUDIT.md` |
 | Moderation funktioniert | ✅ |
 | Auth funktioniert | ⚠️ Benötigt Supabase-Konfiguration |
 | Tests laufen | ✅ 267 Tests |

@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Basis-Farbwerte für den ersten Frame.
+ *
+ * Der ThemeProvider setzt dieselben Variablen später per JavaScript. Ohne
+ * diese Startwerte wäre die Seite bis zur Hydration farblos — genau das
+ * „Aufblitzen", das bei einer installierten App besonders unangenehm ist.
+ * Die Werte stammen aus `packages/ui/src/tokens.ts` (lightTheme/darkTheme).
+ */
+:root {
+  --color-background: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-sunken: #eef0f4;
+  --color-border: #dfe3ea;
+  --color-border-strong: #c6ccd8;
+  --color-text-primary: #171b22;
+  --color-text-secondary: #525b6b;
+  --color-text-tertiary: #6f7889;
+  --color-text-inverse: #ffffff;
+  --color-text-on-brand: #ffffff;
+  --color-brand: #1e6baa;
+  --color-brand-strong: #124169;
+  --color-brand-subtle: #eaf2f8;
+  --color-signal: #ff8a3d;
+  --color-signal-strong: #cc5a12;
+  --color-signal-subtle: #fff3e9;
+  --color-success: #1f9d55;
+  --color-success-subtle: #dff3e6;
+  --color-warning: #8a6314;
+  --color-warning-subtle: #fbf0d8;
+  --color-danger: #c6303c;
+  --color-danger-subtle: #fbe3e5;
+  --color-info: #3b8fb4;
+  --color-info-subtle: #e1f0f6;
+  --color-official: #124169;
+  --color-official-subtle: #eaf2f8;
+  --color-on-official: #ffffff;
+  --color-community: #a0450d;
+  --color-community-subtle: #fff3e9;
+  --color-on-community: #ffffff;
+  --color-overlay: rgba(14, 17, 22, 0.45);
+  --color-skeleton: #dfe3ea;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-background: #0e1116;
+    --color-surface: #171b22;
+    --color-surface-elevated: #262c37;
+    --color-surface-sunken: #0a0d11;
+    --color-border: #2a313c;
+    --color-border-strong: #3b4351;
+    --color-text-primary: #f2f4f8;
+    --color-text-secondary: #a8b0bf;
+    --color-text-tertiary: #79828f;
+    --color-text-inverse: #171b22;
+    --color-text-on-brand: #ffffff;
+    --color-brand: #6ba4c9;
+    --color-brand-strong: #9fc4de;
+    --color-brand-subtle: #10293d;
+    --color-signal: #ff9f5c;
+    --color-signal-strong: #ffc194;
+    --color-signal-subtle: #3a2109;
+    --color-success: #7fcb9c;
+    --color-success-subtle: #10301f;
+    --color-warning: #edc66b;
+    --color-warning-subtle: #332711;
+    --color-danger: #f08a92;
+    --color-danger-subtle: #3a171b;
+    --color-info: #8fc6dc;
+    --color-info-subtle: #122c38;
+    --color-official: #cbdfee;
+    --color-official-subtle: #10293d;
+    --color-on-official: #081d30;
+    --color-community: #ff8a3d;
+    --color-community-subtle: #3a2109;
+    --color-on-community: #2a1405;
+    --color-overlay: rgba(0, 0, 0, 0.6);
+    --color-skeleton: #2a313c;
+
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  html {
+    /* Verhindert das automatische Vergrössern von Text in iOS-Safari beim
+       Drehen des Geräts, ohne die Zoom-Geste zu blockieren (§46). */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased;
+    font-family: theme('fontFamily.sans');
+    /* Overscroll-Gummiband deaktivieren: In der installierten App wirkt es
+       wie ein Fehler, weil dahinter keine Seite liegt. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Sichtbarer Fokus ist Pflicht — die App wird auch mit Tastatur bedient. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Nur für Screenreader sichtbarer Text. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Sicherheitsabstände für Notch und Home-Indikator (iPhone). */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Inhaltsbereich über der fixierten Navigationsleiste. */
+  .app-scroll {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
+/* MapLibre bringt eigene Steuerelemente mit — sie sollen zum Theme passen. */
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
+  background: var(--color-surface) !important;
+  color: var(--color-text-tertiary);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--color-text-secondary);
+}

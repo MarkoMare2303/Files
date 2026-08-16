@@ -4,6 +4,7 @@ import {
   favoriteSchema,
   profileSchema,
   registerDeviceSchema,
+  registerPushSubscriptionSchema,
   reportSchema,
   updateUserSettingsSchema,
   userSettingsSchema,
@@ -194,6 +195,101 @@ export const meRoutes =
           pushRegistered = true;
         }
         return { deviceId: device.id, pushRegistered };
+      },
+    );
+
+    /**
+     * Web-Push-Abo anlegen oder auffrischen.
+     *
+     * Der Endpunkt ist eindeutig: meldet sich derselbe Browser erneut an,
+     * wird die bestehende Zeile aktualisiert. Wechselt der Nutzer am selben
+     * Gerät das Konto, wandert das Abo mit — sonst bekäme die vorherige
+     * Person weiterhin Benachrichtigungen auf ein fremdes Gerät.
+     */
+    fastify.post(
+      '/me/push-subscriptions',
+      {
+        config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+        schema: {
+          tags: ['Konto'],
+          summary: 'Web-Push-Abo registrieren',
+          description:
+            'Speichert ein Browser-Push-Abo (RFC 8030). Übermittelt werden ausschliesslich die vom ' +
+            'Browser erzeugten Werte `endpoint`, `p256dh` und `auth` — keine Gerätekennung und ' +
+            'keine Positionsdaten (§23).',
+          security: [{ bearerAuth: [] }],
+          body: registerPushSubscriptionSchema,
+          response: { 200: z.object({ subscriptionId: uuidSchema }) },
+        },
+      },
+      async (request) => {
+        const body = request.body;
+
+        // Das Abo einem bereits registrierten Gerät zuordnen, falls vorhanden.
+        // Fehlt es, bleibt `device_id` leer — das Abo funktioniert trotzdem.
+        const device = await ctx.db.queryOne<{ id: string }>(
+          'SELECT id FROM public.devices WHERE user_id = $1 AND install_id = $2',
+          [request.user!.id, body.installId],
+        );
+
+        const row = await ctx.db.queryOne<{ id: string }>(
+          `INSERT INTO public.push_subscriptions
+             (user_id, device_id, endpoint, p256dh, auth_secret, expiration_time, user_agent)
+           VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)
+           ON CONFLICT (endpoint) WHERE endpoint IS NOT NULL DO UPDATE SET
+             user_id = EXCLUDED.user_id,
+             device_id = EXCLUDED.device_id,
+             p256dh = EXCLUDED.p256dh,
+             auth_secret = EXCLUDED.auth_secret,
+             expiration_time = EXCLUDED.expiration_time,
+             user_agent = EXCLUDED.user_agent,
+             enabled = true,
+             failure_count = 0,
+             last_error = NULL,
+             updated_at = now()
+           RETURNING id`,
+          [
+            request.user!.id,
+            device?.id ?? null,
+            body.subscription.endpoint,
+            body.subscription.keys.p256dh,
+            body.subscription.keys.auth,
+            body.subscription.expirationTime
+              ? new Date(body.subscription.expirationTime).toISOString()
+              : null,
+            body.userAgent ?? null,
+          ],
+        );
+        if (!row) throw new AppError(ErrorCode.INTERNAL);
+
+        return { subscriptionId: row.id };
+      },
+    );
+
+    /**
+     * Abo entfernen.
+     *
+     * Bewusst gefiltert auf den eigenen Nutzer: der Endpunkt ist zwar schwer
+     * zu erraten, aber er ist kein Geheimnis. Ohne die `user_id`-Bedingung
+     * könnte man fremde Abos abmelden.
+     */
+    fastify.delete(
+      '/me/push-subscriptions',
+      {
+        schema: {
+          tags: ['Konto'],
+          summary: 'Web-Push-Abo entfernen',
+          security: [{ bearerAuth: [] }],
+          body: z.object({ endpoint: z.string().url().max(2048) }),
+          response: { 204: z.null() },
+        },
+      },
+      async (request, reply) => {
+        await ctx.db.query(
+          'DELETE FROM public.push_subscriptions WHERE endpoint = $1 AND user_id = $2',
+          [request.body.endpoint, request.user!.id],
+        );
+        return reply.status(204).send(null);
       },
     );
 

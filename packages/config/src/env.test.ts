@@ -137,7 +137,14 @@ describe('detectMissingIntegrations', () => {
       OPENTRANSPORTDATA_API_KEY: 'key',
       OJP_API_KEY: 'key',
       REDIS_URL: 'redis://localhost:6379',
+      WEB_PUSH_VAPID_PUBLIC_KEY: 'public',
+      WEB_PUSH_VAPID_PRIVATE_KEY: 'private',
     });
     expect(missing).toEqual([]);
+  });
+
+  it('meldet fehlende VAPID-Schlüssel — ohne sie gibt es keine Benachrichtigungen', () => {
+    const missing = detectMissingIntegrations({ WEB_PUSH_VAPID_PUBLIC_KEY: 'public' });
+    expect(missing.some((entry) => entry.includes('WEB_PUSH'))).toBe(true);
   });
 });

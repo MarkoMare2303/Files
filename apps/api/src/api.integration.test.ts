@@ -824,6 +824,136 @@ describe('API-Integration', () => {
       expect(consent?.analytics_consent_at).not.toBeNull();
     });
 
+    it('registriert ein Web-Push-Abo und meldet es wieder ab', async () => {
+      const installId = '11111111-2222-4333-8444-555555555555';
+      const endpoint = 'https://fcm.googleapis.com/fcm/send/test-endpoint-abcdef123456';
+
+      const device = await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/devices',
+        headers: user.authHeader,
+        payload: { installId, platform: 'web', appVersion: '0.1.0' },
+      });
+      expect(device.statusCode).toBe(200);
+
+      const created = await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/push-subscriptions',
+        headers: user.authHeader,
+        payload: {
+          installId,
+          subscription: {
+            endpoint,
+            keys: { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) },
+            expirationTime: null,
+          },
+          userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X)',
+        },
+      });
+      expect(created.statusCode).toBe(200);
+      expect(created.json().subscriptionId).toBeTruthy();
+
+      const stored = await harness.db.queryOne<{ endpoint: string; enabled: boolean; device_id: string | null }>(
+        'SELECT endpoint, enabled, device_id FROM public.push_subscriptions WHERE user_id = $1',
+        [user.id],
+      );
+      expect(stored?.endpoint).toBe(endpoint);
+      expect(stored?.enabled).toBe(true);
+      // Das Abo wird dem registrierten Gerät zugeordnet.
+      expect(stored?.device_id).not.toBeNull();
+
+      const removed = await harness.server.inject({
+        method: 'DELETE',
+        url: '/v1/me/push-subscriptions',
+        headers: user.authHeader,
+        payload: { endpoint },
+      });
+      expect(removed.statusCode).toBe(204);
+
+      const after = await harness.db.query(
+        'SELECT 1 FROM public.push_subscriptions WHERE user_id = $1',
+        [user.id],
+      );
+      expect(after.rows).toHaveLength(0);
+    });
+
+    it('aktualisiert ein bestehendes Abo, statt es zu duplizieren', async () => {
+      const installId = '22222222-3333-4444-8555-666666666666';
+      const endpoint = 'https://updates.push.services.mozilla.com/wpush/v2/test-endpoint-xyz';
+
+      const payload = {
+        installId,
+        subscription: { endpoint, keys: { p256dh: 'C'.repeat(87), auth: 'b'.repeat(22) } },
+      };
+
+      await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/push-subscriptions',
+        headers: user.authHeader,
+        payload,
+      });
+      await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/push-subscriptions',
+        headers: user.authHeader,
+        payload: {
+          ...payload,
+          subscription: { endpoint, keys: { p256dh: 'D'.repeat(87), auth: 'c'.repeat(22) } },
+        },
+      });
+
+      const rows = await harness.db.query<{ p256dh: string }>(
+        'SELECT p256dh FROM public.push_subscriptions WHERE endpoint = $1',
+        [endpoint],
+      );
+      expect(rows.rows).toHaveLength(1);
+      expect(rows.rows[0]?.p256dh).toBe('D'.repeat(87));
+    });
+
+    it('verhindert das Abmelden fremder Abos', async () => {
+      const endpoint = 'https://fcm.googleapis.com/fcm/send/fremdes-abo-123456';
+
+      await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/push-subscriptions',
+        headers: user.authHeader,
+        payload: {
+          installId: '33333333-4444-4555-8666-777777777777',
+          subscription: { endpoint, keys: { p256dh: 'E'.repeat(87), auth: 'd'.repeat(22) } },
+        },
+      });
+
+      // Ein anderer Nutzer kennt den Endpunkt — löschen darf er ihn trotzdem nicht.
+      const attempt = await harness.server.inject({
+        method: 'DELETE',
+        url: '/v1/me/push-subscriptions',
+        headers: otherUser.authHeader,
+        payload: { endpoint },
+      });
+      expect(attempt.statusCode).toBe(204);
+
+      const survived = await harness.db.query(
+        'SELECT 1 FROM public.push_subscriptions WHERE endpoint = $1',
+        [endpoint],
+      );
+      expect(survived.rows).toHaveLength(1);
+    });
+
+    it('lehnt ein Push-Abo ohne Anmeldung ab', async () => {
+      const response = await harness.server.inject({
+        method: 'POST',
+        url: '/v1/me/push-subscriptions',
+        payload: {
+          installId: '44444444-5555-4666-8777-888888888888',
+          subscription: {
+            endpoint: 'https://fcm.googleapis.com/fcm/send/anonym-123456',
+            keys: { p256dh: 'F'.repeat(87), auth: 'e'.repeat(22) },
+          },
+        },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
     it('verwaltet Favoriten', async () => {
       const created = await harness.server.inject({
         method: 'POST',
@@ -936,6 +1066,21 @@ describe('API-Integration', () => {
       // Ohne API-Key sind Echtzeitdaten ehrlich als nicht verfügbar markiert.
       expect(body.dataSources.realtime).toBe(false);
       expect(body.dataSources.journeyPlanner).toBe('gtfs-direct');
+    });
+
+    it('liefert den öffentlichen VAPID-Schlüssel — und niemals den privaten', () => {
+      return harness.server
+        .inject({ method: 'GET', url: '/v1/app-config' })
+        .then((response) => {
+          const body = response.json();
+          expect(body.webPush).toBeDefined();
+          // Ohne konfiguriertes Schlüsselpaar ist Push ehrlich als aus markiert.
+          expect(body.webPush.enabled).toBe(false);
+          expect(body.webPush.publicKey).toBeNull();
+          // Der private Schlüssel darf unter KEINEN Umständen in der Antwort stehen.
+          expect(JSON.stringify(body)).not.toContain('PRIVATE');
+          expect(JSON.stringify(body)).not.toContain('privateKey');
+        });
     });
 
     it('übernimmt administrative Änderungen an den Schwellen', async () => {

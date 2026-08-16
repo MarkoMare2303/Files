@@ -40,6 +40,16 @@ export const appConfigRoutes =
                 officialAlerts: z.boolean(),
                 journeyPlanner: z.string(),
               }),
+              /**
+               * Web Push. Nur der ÖFFENTLICHE VAPID-Schlüssel wird ausgeliefert
+               * — er ist per Definition öffentlich und wird vom Browser für
+               * `PushManager.subscribe()` benötigt. Der private Schlüssel
+               * verlässt den Server nie (§42).
+               */
+              webPush: z.object({
+                enabled: z.boolean(),
+                publicKey: z.string().nullable(),
+              }),
             }),
           },
         },
@@ -89,6 +99,14 @@ export const appConfigRoutes =
             realtime: recent('gtfs_rt_trip_updates'),
             officialAlerts: recent('service_alerts'),
             journeyPlanner: ctx.journeys.usesOjp ? 'ojp' : 'gtfs-direct',
+          },
+          webPush: {
+            // Ohne Schlüsselpaar bietet die App den Schalter gar nicht erst an,
+            // statt ihn wirkungslos anzuzeigen (§55).
+            enabled: Boolean(
+              ctx.env.WEB_PUSH_VAPID_PUBLIC_KEY && ctx.env.WEB_PUSH_VAPID_PRIVATE_KEY,
+            ),
+            publicKey: ctx.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? null,
           },
         };
       },
