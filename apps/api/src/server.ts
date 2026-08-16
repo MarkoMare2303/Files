@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -25,6 +26,17 @@ import { reportRoutes } from './routes/reports.js';
 import { transitRoutes } from './routes/transit.js';
 import { createServices } from './services/index.js';
 
+/** Liefert die pino-pretty-Transportkonfiguration, falls verfügbar. */
+function prettyTransport(nodeEnv: string): { target: string; options: object } | undefined {
+  if (nodeEnv !== 'development') return undefined;
+  try {
+    createRequire(import.meta.url).resolve('pino-pretty');
+    return { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } };
+  } catch {
+    return undefined;
+  }
+}
+
 export interface BuildServerOptions {
   context: AppContext;
   /** Nur für Tests: ersetzt die Token-Prüfung. */
@@ -51,10 +63,10 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         ],
         censor: '[redacted]',
       },
-      transport:
-        ctx.env.NODE_ENV === 'development'
-          ? { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } }
-          : undefined,
+      // Lesbare Logs in der Entwicklung — aber nur, wenn pino-pretty
+      // tatsächlich installiert ist. Sonst würde der Start scheitern, was
+      // besonders in schlanken Produktions-Images passieren kann.
+      transport: prettyTransport(ctx.env.NODE_ENV),
     },
     // Vertraut Proxy-Headern nur, wenn die App hinter einem Reverse Proxy läuft.
     trustProxy: ctx.env.NODE_ENV === 'production',

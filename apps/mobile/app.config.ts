@@ -37,7 +37,10 @@ const config: ExpoConfig = {
 
   android: {
     package: 'ch.swissovlive.app',
-    adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#0D2E4A' },
+    // Hinweis: App-Icon und Splash sind noch nicht gestaltet. Bis dahin
+    // greifen die Expo-Vorgaben, damit `expo prebuild` funktioniert.
+    // Vor dem ersten Store-Build sind eigene Assets zu ergänzen
+    // (siehe IMPLEMENTATION_STATUS.md).
     permissions: [
       'ACCESS_COARSE_LOCATION',
       'ACCESS_FINE_LOCATION',
