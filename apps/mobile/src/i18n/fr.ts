@@ -1,0 +1,50 @@
+import type { de } from './de.js';
+
+/**
+ * Teilübersetzung. Fehlende Schlüssel fallen automatisch auf Deutsch zurück
+ * (siehe index.ts) — es erscheinen nie rohe Schlüssel in der Oberfläche.
+ */
+export const fr: Partial<Record<keyof typeof de, string>> = {
+  'common.ok': 'OK',
+  'common.cancel': 'Annuler',
+  'common.retry': 'Réessayer',
+  'common.close': 'Fermer',
+  'common.back': 'Retour',
+  'common.save': 'Enregistrer',
+  'common.later': 'Plus tard',
+  'common.loading': 'Chargement …',
+  'common.official': 'Information officielle',
+  'common.community': 'Signalement communautaire',
+  'common.estimatedPosition': 'Position estimée',
+  'onboarding.1.title': 'Tes transports. En direct. Ensemble.',
+  'onboarding.next': 'Suivant',
+  'onboarding.start': 'C’est parti',
+  'onboarding.skip': 'Passer',
+  'location.title': 'Activer la localisation',
+  'location.body':
+    'Grâce à ta position, nous identifions la course dans laquelle tu voyages et t’affichons les signalements pertinents.',
+  'location.enable': 'Activer la localisation',
+  'tab.map': 'Carte',
+  'tab.trips': 'Courses',
+  'tab.report': 'Signaler',
+  'tab.reports': 'Signalements',
+  'tab.profile': 'Profil',
+  'home.searchPlaceholder': 'Où veux-tu aller ?',
+  'home.nearby': 'À proximité',
+  'home.currentReports': 'Signalements actuels',
+  'detection.confirmQuestion': 'Tu voyages bien ici ?',
+  'detection.confirmYes': 'Oui',
+  'detection.chooseOther': 'Choisir une autre course',
+  'detection.manualButton': 'Choisir ma course',
+  'trip.nextStop': 'Prochain arrêt',
+  'trip.arrival': 'Arrivée',
+  'trip.liveOnThisTrip': 'En direct sur cette course',
+  'report.create': 'Signaler',
+  'report.submit': 'Envoyer',
+  'report.confirm': 'Confirmer',
+  'report.outdated': 'Plus d’actualité',
+  'profile.signIn': 'Se connecter',
+  'profile.signOut': 'Se déconnecter',
+  'settings.title': 'Réglages',
+  'error.generic': 'Une erreur est survenue. Réessaie.',
+};

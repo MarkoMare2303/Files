@@ -1,0 +1,50 @@
+{
+  "name": "@swissov/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src app --ext .ts,.tsx",
+    "test": "jest --passWithNoTests",
+    "test:unit": "jest --passWithNoTests",
+    "clean": "rm -rf .expo dist .turbo node_modules/.cache"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-react-native": "^10.0.1",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@supabase/supabase-js": "^2.47.10",
+    "@swissov/shared": "workspace:*",
+    "@swissov/types": "workspace:*",
+    "@swissov/ui": "workspace:*",
+    "@tanstack/react-query": "^5.62.11",
+    "expo": "~52.0.23",
+    "expo-application": "~6.0.1",
+    "expo-constants": "~17.0.3",
+    "expo-haptics": "~14.0.0",
+    "expo-linking": "~7.0.3",
+    "expo-location": "~18.0.4",
+    "expo-notifications": "~0.29.11",
+    "expo-router": "~4.0.16",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~2.0.0",
+    "expo-system-ui": "~4.0.7",
+    "react": "18.3.1",
+    "react-hook-form": "^7.54.2",
+    "react-native": "0.76.5",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "typescript": "^5.7.2"
+  }
+}

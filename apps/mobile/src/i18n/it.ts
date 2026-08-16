@@ -1,0 +1,50 @@
+import type { de } from './de.js';
+
+/**
+ * Teilübersetzung. Fehlende Schlüssel fallen automatisch auf Deutsch zurück
+ * (siehe index.ts) — es erscheinen nie rohe Schlüssel in der Oberfläche.
+ */
+export const it: Partial<Record<keyof typeof de, string>> = {
+  'common.ok': 'OK',
+  'common.cancel': 'Annulla',
+  'common.retry': 'Riprova',
+  'common.close': 'Chiudi',
+  'common.back': 'Indietro',
+  'common.save': 'Salva',
+  'common.later': 'Più tardi',
+  'common.loading': 'Caricamento …',
+  'common.official': 'Informazione ufficiale',
+  'common.community': 'Segnalazione della community',
+  'common.estimatedPosition': 'Posizione stimata',
+  'onboarding.1.title': 'Il tuo trasporto pubblico. Live. Insieme.',
+  'onboarding.next': 'Avanti',
+  'onboarding.start': 'Iniziamo',
+  'onboarding.skip': 'Salta',
+  'location.title': 'Attiva la posizione',
+  'location.body':
+    'Con la tua posizione riconosciamo su quale corsa stai viaggiando e ti mostriamo le segnalazioni pertinenti.',
+  'location.enable': 'Attiva la posizione',
+  'tab.map': 'Mappa',
+  'tab.trips': 'Corse',
+  'tab.report': 'Segnala',
+  'tab.reports': 'Segnalazioni',
+  'tab.profile': 'Profilo',
+  'home.searchPlaceholder': 'Dove vuoi andare?',
+  'home.nearby': 'Nelle vicinanze',
+  'home.currentReports': 'Segnalazioni attuali',
+  'detection.confirmQuestion': 'Stai viaggiando qui?',
+  'detection.confirmYes': 'Sì',
+  'detection.chooseOther': 'Scegli un’altra corsa',
+  'detection.manualButton': 'Scegli la mia corsa',
+  'trip.nextStop': 'Prossima fermata',
+  'trip.arrival': 'Arrivo',
+  'trip.liveOnThisTrip': 'In diretta su questa corsa',
+  'report.create': 'Segnala',
+  'report.submit': 'Invia',
+  'report.confirm': 'Conferma',
+  'report.outdated': 'Non più attuale',
+  'profile.signIn': 'Accedi',
+  'profile.signOut': 'Esci',
+  'settings.title': 'Impostazioni',
+  'error.generic': 'Si è verificato un errore. Riprova.',
+};
