@@ -3,8 +3,9 @@ dist/
 # Auslieferungsbündel — wird von scripts/build-deploy-bundle.mjs erzeugt und
 # enthält node_modules. Gehört nicht ins Repository.
 dist-deploy/
-swissov-deploy*.tar.gz
-swissov-deploy*.tar.gz.part*
+swissov-*.tar.gz
+swissov-*.tar.gz.part*
+swissov-*.zip
 
 # Playwright-Berichte und Fehlerartefakte eines Laufs
 playwright-report/
