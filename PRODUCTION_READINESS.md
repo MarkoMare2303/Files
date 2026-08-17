@@ -125,6 +125,17 @@ Form der dortigen echten Feeds. Dafür: `pnpm gtfs:verify-production`, dann
 
 ### 3.2 Supabase — Anmeldung und Realtime
 
+**Supabase ist nicht die Datenbank der Anwendung.** Die Fahrplan- und
+Community-Daten liegen in einer eigenen PostgreSQL (`DATABASE_URL`, siehe 4.1);
+Supabase liefert nur Anmeldung und Realtime-Broadcast. Grund: der Schweizer
+Fahrplan belegt rund 8 GB — mehr, als kleine Supabase-Tarife bieten.
+
+In dieser Aufteilung fehlt in der eigenen Datenbank das Supabase-`auth`-Schema.
+Migration 0002 legt dafür einen Stub `auth.users` an, den
+`public.profiles` per Fremdschlüssel braucht. Er enthält **nur die ID**; die
+E-Mail-Adresse bleibt bei Supabase. Beim Löschen eines Kontos entfernt die API
+beides — den Stub hier und das Konto bei Supabase.
+
 ```bash
 SUPABASE_URL=https://<projekt>.supabase.co
 SUPABASE_ANON_KEY=…              # öffentlich, darf in den Browser

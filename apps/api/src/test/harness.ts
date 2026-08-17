@@ -25,6 +25,12 @@ export interface TestHarness {
   feed: TestFeed;
   /** Erzeugt einen Nutzer und liefert ein gültiges Bearer-Token. */
   createUser(options?: { role?: 'USER' | 'MODERATOR' | 'ADMIN' }): Promise<TestUser>;
+  /**
+   * Erzeugt einen Nutzer ausschliesslich über `ProfileService.ensure()` — also
+   * auf demselben Weg wie der erste echte Login, ohne dass der Test vorher
+   * selbst in `auth.users` schreibt.
+   */
+  createUserViaEnsure(): Promise<{ id: string }>;
   close(): Promise<void>;
 }
 
@@ -34,7 +40,20 @@ export interface TestUser {
   authHeader: { authorization: string };
 }
 
-export async function createHarness(options: { now?: Date } = {}): Promise<TestHarness> {
+export interface HarnessOptions {
+  now?: Date;
+  /**
+   * Überschreibt einzelne Umgebungswerte.
+   *
+   * Gedacht für die Betriebsart „eigene PostgreSQL + Supabase nur für die
+   * Anmeldung": dort ist `SUPABASE_URL` gesetzt, das `auth`-Schema aber der
+   * lokale Shim aus Migration 0002. Diese Kombination verhält sich anders als
+   * beide Reinformen und liess sich vorher nicht testen.
+   */
+  env?: Record<string, string>;
+}
+
+export async function createHarness(options: HarnessOptions = {}): Promise<TestHarness> {
   loadEnvFiles();
 
   const connectionString =
@@ -60,6 +79,7 @@ export async function createHarness(options: { now?: Date } = {}): Promise<TestH
     WEB_PUSH_VAPID_PRIVATE_KEY: '',
     OPENTRANSPORTDATA_API_KEY: '',
     OJP_API_KEY: '',
+    ...options.env,
   });
 
   const db = createDatabase({
@@ -106,7 +126,7 @@ export async function createHarness(options: { now?: Date } = {}): Promise<TestH
         .sign(secret);
 
       // Profil anlegen (sonst entsteht es erst beim ersten Request).
-      await ctx.profiles.ensure(id, `${id}@test.local`);
+      await ctx.profiles.ensure(id);
       if (userOptions.role && userOptions.role !== 'USER') {
         await db.query('UPDATE public.profiles SET role = $2::public.user_role WHERE id = $1', [
           id,
@@ -114,6 +134,11 @@ export async function createHarness(options: { now?: Date } = {}): Promise<TestH
         ]);
       }
       return { id, token, authHeader: { authorization: `Bearer ${token}` } };
+    },
+    async createUserViaEnsure() {
+      const id = randomUUID();
+      await ctx.profiles.ensure(id);
+      return { id };
     },
     async close() {
       await server.close();

@@ -401,15 +401,19 @@ export const meRoutes =
 
         // Das Auth-Konto selbst liegt bei Supabase; ohne Service-Role-Key kann
         // die API es nicht entfernen. Das wird ehrlich zurückgemeldet (§55).
+        const supabaseConfigured = Boolean(
+          ctx.env.SUPABASE_URL && ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+        );
         let authAccountDeleted = false;
-        if (ctx.env.SUPABASE_URL && ctx.env.SUPABASE_SERVICE_ROLE_KEY) {
+
+        if (supabaseConfigured) {
           try {
             const response = await fetch(
               `${ctx.env.SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
               {
                 method: 'DELETE',
                 headers: {
-                  apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+                  apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY!,
                   authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
                 },
                 signal: AbortSignal.timeout(8000),
@@ -419,9 +423,21 @@ export const meRoutes =
           } catch (error) {
             request.log.error({ err: error }, 'Auth-Konto konnte nicht gelöscht werden');
           }
-        } else if (ctx.authMode === 'shim') {
+        }
+
+        // Unabhängig davon: liegt in dieser Datenbank der Shim aus Migration
+        // 0002, muss auch dessen Zeile weg.
+        //
+        // Das war vorher ein `else if` zum Supabase-Zweig — also genau dann
+        // unerreichbar, wenn Supabase konfiguriert ist. Beides trifft in der
+        // vorgesehenen Betriebsart zusammen (eigene PostgreSQL für die Daten,
+        // Supabase für die Anmeldung): die Zeile blieb stehen, während die
+        // Antwort „Konto und alle Daten wurden gelöscht" meldete.
+        if (ctx.authMode === 'shim') {
           await ctx.db.query('DELETE FROM auth.users WHERE id = $1', [userId]);
-          authAccountDeleted = true;
+          // Gibt es kein Supabase, IST der Stub das Konto — dann ist es hiermit
+          // gelöscht.
+          if (!supabaseConfigured) authAccountDeleted = true;
         }
 
         return {

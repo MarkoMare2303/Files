@@ -128,8 +128,10 @@ export default fp<AuthPluginOptions>(async (fastify, options) => {
       const userId = typeof payload.sub === 'string' ? payload.sub : null;
       if (!userId) return;
 
+      // Die E-Mail bleibt auf die Anfrage beschränkt und wird nicht gespeichert
+      // — weder im Profil (§23) noch im Auth-Shim.
       const email = typeof payload.email === 'string' ? payload.email : undefined;
-      const profile = await ctx.profiles.ensure(userId, email);
+      const profile = await ctx.profiles.ensure(userId);
       if (profile.deleted_at) return; // Gelöschte Konten gelten als nicht angemeldet.
 
       request.user = { id: userId, email, role: profile.role, profile };

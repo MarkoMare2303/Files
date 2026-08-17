@@ -1029,6 +1029,15 @@ describe('API-Integration', () => {
         );
         expect(remaining?.count).toBe(0);
       }
+
+      // Auch der Auth-Stub muss weg. Ohne diese Zeile blieb unbemerkt, dass er
+      // stehenbleibt, sobald Supabase konfiguriert ist — siehe
+      // account-deletion.integration.test.ts.
+      const authRow = await harness.db.queryOne<{ count: number }>(
+        'SELECT count(*)::int AS count FROM auth.users WHERE id = $1',
+        [doomed.id],
+      );
+      expect(authRow?.count).toBe(0);
     });
   });
 

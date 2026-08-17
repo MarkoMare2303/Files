@@ -67,6 +67,23 @@ administrativer Zugriffe. **[JURISTISCH PRÜFEN]**
 Die App erzeugt beim ersten Start eine zufällige Installations-ID. IDFA,
 Android Advertising ID oder ähnliche Kennungen werden nicht verwendet.
 
+### Keine E-Mail-Adresse in der eigenen Datenbank
+
+Die Anwendung wird so betrieben, dass die Daten in einer eigenen PostgreSQL
+liegen und nur die Anmeldung über Supabase läuft (der Schweizer Fahrplan belegt
+rund 8 GB). In der eigenen Datenbank fehlt deshalb das Supabase-`auth`-Schema;
+Migration 0002 legt einen Stub `auth.users` an, weil `public.profiles` per
+Fremdschlüssel darauf verweist.
+
+Dieser Stub enthält **ausschliesslich die ID**. Die E-Mail-Adresse bleibt bei
+Supabase — sie wird von der Anwendung nirgends gelesen, und das Profil führt
+bewusst keine. Die Adresse existiert nur noch für die Dauer einer Anfrage im
+Speicher (aus dem JWT, für `request.user.email`).
+
+Beim Löschen eines Kontos wird der Stub mitentfernt, unabhängig davon, ob das
+Konto bei Supabase erreichbar war. Regressionstest:
+`apps/api/src/account-deletion.integration.test.ts`.
+
 ## Einwilligungen
 
 | Einwilligung | Standard | Wirkung |
@@ -96,8 +113,14 @@ der System-Dialog. „Später" ist eine gleichwertige Option.
 Die Löschung entfernt Profil, Einstellungen, Meldungen, Stimmen, Flags,
 Sitzungen, Favoriten, Geräte, Push-Tokens, Reputationsereignisse und
 Missbrauchssignale. Ist `SUPABASE_SERVICE_ROLE_KEY` gesetzt, wird auch das
-Auth-Konto gelöscht; andernfalls meldet die API ehrlich zurück, dass dieser
-Schritt separat erfolgen muss.
+Auth-Konto bei Supabase gelöscht; andernfalls meldet die API ehrlich zurück,
+dass dieser Schritt separat erfolgen muss.
+
+Zusätzlich — und unabhängig davon, ob Supabase erreichbar war — wird die Zeile
+im lokalen `auth.users`-Stub entfernt. Die beiden Schritte sind bewusst
+getrennt: solange die Stub-Löschung am Supabase-Aufruf hing, blieb bei
+konfiguriertem Supabase eine Zeile zurück, während die Antwort „Konto und alle
+Daten wurden gelöscht" meldete.
 
 ## Analytik
 

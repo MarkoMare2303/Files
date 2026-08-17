@@ -66,16 +66,22 @@ export class ProfileService {
    * Supabase-Auth-Schema benötigen erhöhte Rechte und scheitern still, wenn
    * diese fehlen. Die faule Erzeugung ist robust und idempotent.
    */
-  async ensure(userId: string, email?: string): Promise<ProfileRow> {
+  async ensure(userId: string): Promise<ProfileRow> {
     const existing = await this.find(userId);
     if (existing) return existing;
 
     if (this.authMode === 'shim') {
-      // Lokale Entwicklung: das Auth-Konto existiert nur als Stub.
-      await this.db.query(
-        'INSERT INTO auth.users (id, email) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING',
-        [userId, email ?? null],
-      );
+      // Das Auth-Konto liegt nicht in dieser Datenbank — entweder bei Supabase
+      // (Betrieb: eigene PostgreSQL, Anmeldung über Supabase) oder es gibt gar
+      // keines (lokale Entwicklung). Der Stub existiert allein, um den
+      // Fremdschlüssel von `public.profiles` zu erfüllen.
+      //
+      // Bewusst NUR die ID: die E-Mail-Adresse wird von der Anwendung nirgends
+      // gelesen — das Profil führt keine (§23) — und würde hier lediglich
+      // personenbezogene Daten ohne Zweck ansammeln.
+      await this.db.query('INSERT INTO auth.users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING', [
+        userId,
+      ]);
     }
 
     const alias = generateAlias(userId, this.aliasSecret);
