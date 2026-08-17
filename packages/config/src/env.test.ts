@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse as parseDotenv } from 'dotenv';
 import { describe, expect, it } from 'vitest';
 import {
   apiEnvSchema,
   detectMissingIntegrations,
   parseEnv,
+  transitEnvSchema,
   workerEnvSchema,
 } from './env.js';
 
@@ -142,6 +147,71 @@ describe('workerEnvSchema', () => {
         GTFS_RT_POLL_INTERVAL_SECONDS: '1',
       } as NodeJS.ProcessEnv),
     ).toThrow();
+  });
+});
+
+describe('.env.example', () => {
+  /**
+   * Der dokumentierte Einstieg ist `cp .env.example .env`. Genau dieser Weg
+   * muss funktionieren — und tat es nicht: `OPENTRANSPORTDATA_AUTH_SCHEME=`
+   * ist dort bewusst leer („Leer lassen: …"), wurde von der Aufzählung aber
+   * abgewiesen. Der Fehler trat erst beim ersten Einrichten mit echten
+   * Zugangsdaten auf, weil vorher niemand die Beispieldatei wirklich geparst
+   * hat. Dieser Test parst sie.
+   */
+  const example = parseDotenv(
+    readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env.example'), 'utf8'),
+  ) as NodeJS.ProcessEnv;
+
+  it('ist als Vorlage überhaupt einlesbar', () => {
+    expect(Object.keys(example).length).toBeGreaterThan(20);
+    // Die Zeile, die den Fehler ausgelöst hat: vorhanden, aber leer.
+    expect(example.OPENTRANSPORTDATA_AUTH_SCHEME).toBe('');
+  });
+
+  it('wird unverändert von allen Schemata akzeptiert', () => {
+    expect(() => parseEnv(apiEnvSchema, example)).not.toThrow();
+    expect(() => parseEnv(workerEnvSchema, example)).not.toThrow();
+    expect(() => parseEnv(transitEnvSchema, example)).not.toThrow();
+  });
+
+  it('führt leere optionale Werte auf „nicht gesetzt" zurück', () => {
+    const env = parseEnv(apiEnvSchema, example);
+    expect(env.OPENTRANSPORTDATA_AUTH_SCHEME).toBeUndefined();
+    expect(env.OPENTRANSPORTDATA_API_KEY).toBeUndefined();
+    expect(env.SUPABASE_URL).toBeUndefined();
+    // Werte MIT Inhalt bleiben erhalten — die Vorlage ist keine Leerdatei.
+    expect(env.GTFS_STATIC_URL).toContain('opentransportdata.swiss');
+  });
+});
+
+describe('OPENTRANSPORTDATA_AUTH_SCHEME', () => {
+  it('akzeptiert die drei Verfahren', () => {
+    for (const scheme of ['bearer', 'raw', 'header'] as const) {
+      const env = parseEnv(transitEnvSchema, {
+        OPENTRANSPORTDATA_AUTH_SCHEME: scheme,
+      } as NodeJS.ProcessEnv);
+      expect(env.OPENTRANSPORTDATA_AUTH_SCHEME).toBe(scheme);
+    }
+  });
+
+  it('behandelt leer und nur Leerzeichen als nicht gesetzt', () => {
+    for (const value of ['', '   ']) {
+      const env = parseEnv(transitEnvSchema, {
+        OPENTRANSPORTDATA_AUTH_SCHEME: value,
+      } as NodeJS.ProcessEnv);
+      expect(env.OPENTRANSPORTDATA_AUTH_SCHEME).toBeUndefined();
+    }
+  });
+
+  it('lehnt einen Tippfehler weiterhin ab', () => {
+    // Die Nachsicht gegenüber Leerwerten darf keine Nachsicht gegenüber
+    // falschen Werten werden — sonst wird still das falsche Verfahren genutzt.
+    expect(() =>
+      parseEnv(transitEnvSchema, {
+        OPENTRANSPORTDATA_AUTH_SCHEME: 'Bearer',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/OPENTRANSPORTDATA_AUTH_SCHEME/);
   });
 });
 

@@ -35,6 +35,23 @@ const optionalNonEmpty = z
   .transform((v) => (v.length === 0 ? undefined : v))
   .optional();
 
+/**
+ * Aufzählung, bei der ein leerer Wert „nicht gesetzt" bedeutet.
+ *
+ * `.env`-Dateien kennen kein „nicht vorhanden": eine Zeile ohne Wert liefert
+ * den leeren String, nicht `undefined`. Ein blankes `z.enum(...).optional()`
+ * weist den leeren String deshalb ab — und zwar genau dann, wenn jemand der
+ * Anleitung in `.env.example` folgt und die Zeile bewusst leer lässt.
+ */
+function optionalEnum<const T extends readonly [string, ...string[]]>(values: T) {
+  return z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value === undefined || value.length === 0 ? undefined : value))
+    .pipe(z.enum(values).optional());
+}
+
 const commaSeparated = z
   .string()
   .default('')
@@ -73,7 +90,7 @@ export const transitEnvSchema = z.object({
    * (`bearer` → `raw` → `header`). Wer das richtige kennt, setzt es hier und
    * spart die Fallback-Anfragen.
    */
-  OPENTRANSPORTDATA_AUTH_SCHEME: z.enum(['bearer', 'raw', 'header']).optional(),
+  OPENTRANSPORTDATA_AUTH_SCHEME: optionalEnum(['bearer', 'raw', 'header']),
   GTFS_STATIC_URL: z
     .string()
     .default('https://opentransportdata.swiss/dataset/timetable-2025-gtfs2020/permalink'),
