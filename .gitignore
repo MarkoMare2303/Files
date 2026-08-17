@@ -4,6 +4,7 @@ dist/
 # enthält node_modules. Gehört nicht ins Repository.
 dist-deploy/
 swissov-deploy*.tar.gz
+swissov-deploy*.tar.gz.part*
 
 # Playwright-Berichte und Fehlerartefakte eines Laufs
 playwright-report/
