@@ -3,6 +3,7 @@ import {
   detectMissingIntegrations,
   loadEnvFiles,
   parseEnv,
+  resolveTransitApiKeys,
   workerEnvSchema,
 } from '@swissov/config';
 import { createDatabase } from '@swissov/database';
@@ -110,7 +111,9 @@ async function main(): Promise<void> {
       }
       const result = await importGtfsStatic(db, {
         url: env.GTFS_STATIC_URL,
-        apiKey: env.OPENTRANSPORTDATA_API_KEY,
+        // Der Fahrplan liegt im CKAN-Portal — eigener Dienst, eigenes Token.
+        apiKey: resolveTransitApiKeys(env).ckan,
+        authScheme: env.OPENTRANSPORTDATA_AUTH_SCHEME,
         log: (message) => jobLogger.info(message),
       });
       jobLogger.info('GTFS-Import beendet', { status: result.status, feedId: result.feedId });

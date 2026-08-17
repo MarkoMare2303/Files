@@ -30,13 +30,24 @@ export interface FetchFeedOptions {
   signal?: AbortSignal;
   /** Erzwingt ein Authentifizierungsverfahren; sonst wird durchprobiert. */
   authScheme?: string | undefined;
+  /**
+   * Welche Umgebungsvariable diesen Feed versorgt.
+   *
+   * GTFS-RT und GTFS-SA sind bei opentransportdata.swiss getrennte Dienste mit
+   * getrennten Tokens. Eine Fehlermeldung, die pauschal auf
+   * `OPENTRANSPORTDATA_API_KEY` verweist, schickt den Betreiber deshalb zur
+   * falschen Zeile in der `.env`.
+   */
+  credentialVariable?: string | undefined;
 }
 
 /** Lädt und dekodiert eine GTFS-RT-FeedMessage. */
 export async function fetchFeedMessage(
   options: FetchFeedOptions,
 ): Promise<GtfsRealtimeBindings.transit_realtime.FeedMessage> {
-  if (!options.apiKey) throw new MissingCredentialsError('OPENTRANSPORTDATA_API_KEY');
+  if (!options.apiKey) {
+    throw new MissingCredentialsError(options.credentialVariable ?? 'OPENTRANSPORTDATA_API_KEY');
+  }
 
   const { response } = await authorizedRequest(
     options.url,

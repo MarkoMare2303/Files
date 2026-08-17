@@ -96,8 +96,10 @@ Einschränkungen):
 
 | Variable | Wofür | Woher |
 |----------|-------|-------|
-| `OPENTRANSPORTDATA_API_KEY` | Verspätungen, Ausfälle, offizielle Störungen | Kostenlos: <https://opentransportdata.swiss/de/register/> → „Meine Konten" → Token erzeugen |
-| `OJP_API_KEY` | Verbindungssuche mit Umstiegen | Gleiche Plattform, separater Token |
+| `OPENTRANSPORTDATA_CKAN_API_KEY` | Fahrplan-Download (GTFS Static) | Kostenlos: <https://opentransportdata.swiss/de/register/> → „Meine Konten" → je Dienst eine Anwendung registrieren |
+| `OPENTRANSPORTDATA_GTFS_RT_API_KEY` | Verspätungen, Ausfälle | Gleiche Plattform, **eigenes** Token |
+| `OPENTRANSPORTDATA_GTFS_SA_API_KEY` | offizielle Störungsmeldungen | Gleiche Plattform, **eigenes** Token |
+| `OJP_API_KEY` | Verbindungssuche mit Umstiegen | Gleiche Plattform, **eigenes** Token |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` | Anmeldung, Realtime, Admin-Portal | <https://supabase.com> → Projekt → Settings → API |
 | `APPLE_CLIENT_ID`, `GOOGLE_CLIENT_ID` | Anmeldung mit Apple/Google | Apple Developer Program bzw. Google Cloud Console |
 

@@ -129,7 +129,7 @@ eigene API und Supabase begrenzt.
 ## Secrets
 
 - Serverseitige Schlüssel (`SUPABASE_SERVICE_ROLE_KEY`,
-  `OPENTRANSPORTDATA_API_KEY`, `OJP_API_KEY`) sind der App **nie** bekannt.
+  `OPENTRANSPORTDATA_*_API_KEY`, `OJP_API_KEY`) sind der App **nie** bekannt.
 - Nur `EXPO_PUBLIC_*` landet im App-Bundle — dort ausschliesslich die API-URL,
   die Supabase-URL, der Anon-Key und die Karten-Style-URL.
 - `.env` ist in `.gitignore`; ein CI-Schritt (`scripts/check-secrets.mjs`)

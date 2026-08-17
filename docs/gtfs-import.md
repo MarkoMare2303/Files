@@ -5,18 +5,34 @@ Fahrplandaten in die App?**
 
 ---
 
-## 1. Die drei Datenquellen
+## 1. Die Datenquellen
 
-| Quelle | Wofür | URL (Voreinstellung) | Pflicht |
+| Dienst im Portal | Wofür | Variable | Pflicht |
 | --- | --- | --- | --- |
-| GTFS Static | Haltestellen, Linien, Fahrten, Abfahrtszeiten, Streckenverläufe | `https://opentransportdata.swiss/dataset/timetable-2025-gtfs2020/permalink` | **ja** |
-| GTFS-RT TripUpdates | Verspätungen, Ausfälle | `https://api.opentransportdata.swiss/gtfsrt2020` | nein |
-| GTFS-RT ServiceAlerts | offizielle Störungsmeldungen | `https://api.opentransportdata.swiss/gtfsrt2020` | nein |
-| OJP 2.0 | Verbindungssuche mit Umstiegen | `https://api.opentransportdata.swiss/ojp20` | nein |
+| **CKAN** | Fahrplan-Download (GTFS Static): Haltestellen, Linien, Fahrten, Zeiten | `OPENTRANSPORTDATA_CKAN_API_KEY` | **ja** |
+| **GTFS-RT** | Verspätungen, Ausfälle | `OPENTRANSPORTDATA_GTFS_RT_API_KEY` | nein |
+| **GTFS-SA** | offizielle Störungsmeldungen | `OPENTRANSPORTDATA_GTFS_SA_API_KEY` | nein |
+| **OJP 2.0** | Verbindungssuche mit Umstiegen | `OJP_API_KEY` | nein |
 
-Alle vier liegen auf **opentransportdata.swiss** und nutzen denselben
-API-Schlüssel. Der Permalink für den statischen Datensatz antwortet mit einer
-Weiterleitung auf die eigentliche ZIP-Datei; der Importer folgt ihr.
+Nicht verwendet: **SIRI-PT** (`siri_pt_plan`) und **SIRI-ET** (`siri_et_plan`).
+Die App liest Soll- und Ist-Fahrplan aus den GTFS-Feeds; ein zusätzliches
+SIRI-Abonnement bringt ihr nichts.
+
+> **Ein Schlüssel reicht nicht.** opentransportdata.swiss vergibt Tokens
+> **pro registrierter Anwendung**, nicht pro Konto: für jeden Dienst wird im
+> Portal eine eigene Anwendung angelegt, mit eigener App-ID und eigenem Token.
+> Ein Token am falschen Endpunkt antwortet mit 401/403 — das sieht aus wie ein
+> abgelaufener Schlüssel, ist aber nur der falsche.
+
+Wer nur einen Schlüssel hat, kann `OPENTRANSPORTDATA_API_KEY` setzen: dieser
+Wert greift überall dort, wo keine dienstspezifische Variable gesetzt ist. Für
+OJP gilt der Rückfall bewusst **nicht** — siehe Abschnitt 2.
+
+Die URLs (`GTFS_STATIC_URL`, `GTFS_RT_TRIP_UPDATES_URL`,
+`GTFS_RT_SERVICE_ALERTS_URL`, `OJP_ENDPOINT_URL`) sind vorbelegt und müssen nur
+zum Fahrplanwechsel angefasst werden. Der Permalink für den statischen Datensatz
+antwortet mit einer Weiterleitung auf die eigentliche ZIP-Datei; der Importer
+folgt ihr.
 
 > Der Datensatzname enthält das Fahrplanjahr (`timetable-2025-…`). Zum
 > Fahrplanwechsel im Dezember ändert er sich — dann `GTFS_STATIC_URL`
@@ -27,10 +43,28 @@ Weiterleitung auf die eigentliche ZIP-Datei; der Importer folgt ihr.
 
 ## 2. Schlüssel eintragen
 
+Im Portal unter „Meine Konten" je Dienst eine Anwendung registrieren und das
+Token übernehmen:
+
 ```bash
 # Kostenlos registrieren: https://opentransportdata.swiss
-OPENTRANSPORTDATA_API_KEY=<dein-schlüssel>
+OPENTRANSPORTDATA_CKAN_API_KEY=<token der CKAN-Anwendung>
+OPENTRANSPORTDATA_GTFS_RT_API_KEY=<token der GTFS-RT-Anwendung>
+OPENTRANSPORTDATA_GTFS_SA_API_KEY=<token der GTFS-SA-Anwendung>
+
+# Optional, eigener Dienst:
+OJP_API_KEY=<token der OJP-2.0-Anwendung>
 ```
+
+Der **Token-Hash**, den das Portal neben jedem Token anzeigt, wird nicht
+gebraucht — er dient dem Wiedererkennen im Portal, nicht der Authentifizierung.
+Ebensowenig die App-ID.
+
+**Warum OJP keinen Rückfall auf `OPENTRANSPORTDATA_API_KEY` hat:** OJP ist
+optional. Würde dort ein generischer Schlüssel eingesetzt, meldete
+`/v1/app-config` die Verbindungssuche als aktiv, und jede Anfrage liefe in ein
+401 — „konfiguriert, aber kaputt" statt schlicht „nicht aktiv". Ohne
+`OJP_API_KEY` schaltet die App sichtbar auf die Fahrplan-Direktsuche um.
 
 **Zum Authentifizierungsverfahren:** Die Plattform hat es im Lauf der Zeit
 geändert, und nicht alle Endpunkte verhalten sich gleich. Der Code probiert
@@ -58,15 +92,22 @@ pnpm gtfs:verify-production
 ```
 
 Das Skript lädt nichts herunter und schreibt nichts in die Datenbank. Es prüft
-Zugangsdaten, alle drei Feeds und OJP, und deutet jeden Fehler:
+jeden Dienst mit **seinem eigenen** Schlüssel und deutet jeden Fehler:
 
 ```text
-✓ Zugangsdaten opentransportdata.swiss
+✓ Zugangsdaten CKAN (Fahrplan-Download)     eyJv…J9 (120 Zeichen) — aus OPENTRANSPORTDATA_CKAN_API_KEY
+✓ Zugangsdaten GTFS-RT (Verspätungen)       eyJv…J9 (120 Zeichen) — aus OPENTRANSPORTDATA_GTFS_RT_API_KEY
+✓ Zugangsdaten GTFS-SA (Störungsmeldungen)  eyJv…J9 (120 Zeichen) — aus OPENTRANSPORTDATA_GTFS_SA_API_KEY
+
 ✓ GTFS-Static (Fahrplan-Datensatz)          erreichbar — 412.7 MB
 ✓ GTFS-RT TripUpdates (Verspätungen)        1284 KB Protocol Buffers
 ✓ GTFS-RT ServiceAlerts                     87 KB Protocol Buffers
 ○ OJP 2.0 (Verbindungssuche)                nicht konfiguriert
 ```
+
+Steht dort `— aus OPENTRANSPORTDATA_API_KEY (Rückfall)`, greift für diesen
+Dienst der generische Schlüssel. Das ist zulässig, aber selten beabsichtigt;
+das Skript weist darauf hin, wenn alle Dienste denselben Wert benutzen.
 
 Bei HTTP 403 unterscheidet die Ausgabe zwei Ursachen: fehlende Freischaltung
 des Datensatzes im Portal, oder ein Proxy zwischen Server und Internet. In

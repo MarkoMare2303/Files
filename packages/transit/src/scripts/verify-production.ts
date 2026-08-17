@@ -1,5 +1,11 @@
 #!/usr/bin/env node
-import { transitEnvSchema, loadEnvFiles, parseEnv } from '@swissov/config';
+import {
+  TRANSIT_KEY_VARIABLES,
+  loadEnvFiles,
+  parseEnv,
+  resolveTransitApiKeys,
+  transitEnvSchema,
+} from '@swissov/config';
 import { httpRequest, HttpError } from '../http.js';
 
 /**
@@ -142,6 +148,7 @@ async function checkRealtimeFeed(
   name: string,
   url: string | undefined,
   apiKey: string | undefined,
+  variable: string,
 ): Promise<void> {
   if (!url) {
     record({ name, required: false, ok: false, detail: 'keine URL konfiguriert — übersprungen' });
@@ -153,7 +160,7 @@ async function checkRealtimeFeed(
       required: false,
       ok: false,
       detail: 'kein API-Schlüssel gesetzt — übersprungen',
-      hint: 'OPENTRANSPORTDATA_API_KEY setzen.',
+      hint: `${variable} setzen.`,
     });
     return;
   }
@@ -257,24 +264,64 @@ async function main(): Promise<void> {
   console.log('');
 
   // --- 1. Zugangsdaten ------------------------------------------------------
-  const apiKey = env.OPENTRANSPORTDATA_API_KEY;
-  record({
-    name: 'Zugangsdaten opentransportdata.swiss',
-    required: true,
-    ok: Boolean(apiKey),
-    detail: apiKey ? `gesetzt: ${maskSecret(apiKey)}` : 'OPENTRANSPORTDATA_API_KEY ist nicht gesetzt',
-    hint: 'Schlüssel unter https://opentransportdata.swiss beantragen und in .env eintragen.',
-  });
+  //
+  // opentransportdata.swiss vergibt Tokens PRO DIENST, nicht pro Konto: für
+  // CKAN (Fahrplan-Download), GTFS-RT und GTFS-SA wird je eine eigene
+  // Anwendung registriert. Ein Token am falschen Endpunkt liefert 401/403 und
+  // sieht dabei exakt aus wie ein abgelaufener Schlüssel. Deshalb wird hier
+  // jeder Dienst einzeln ausgewiesen — samt der Variable, aus der er stammt.
+  const keys = resolveTransitApiKeys(env);
+
+  const services = [
+    { key: keys.ckan, own: env.OPENTRANSPORTDATA_CKAN_API_KEY, id: 'ckan', label: 'CKAN (Fahrplan-Download)' },
+    { key: keys.gtfsRt, own: env.OPENTRANSPORTDATA_GTFS_RT_API_KEY, id: 'gtfsRt', label: 'GTFS-RT (Verspätungen)' },
+    { key: keys.gtfsSa, own: env.OPENTRANSPORTDATA_GTFS_SA_API_KEY, id: 'gtfsSa', label: 'GTFS-SA (Störungsmeldungen)' },
+  ] as const;
+
+  for (const service of services) {
+    const variable = TRANSIT_KEY_VARIABLES[service.id];
+    record({
+      name: `Zugangsdaten ${service.label}`,
+      required: true,
+      ok: Boolean(service.key),
+      detail: service.key
+        ? `${maskSecret(service.key)} — aus ${service.own ? variable : 'OPENTRANSPORTDATA_API_KEY (Rückfall)'}`
+        : `${variable} ist nicht gesetzt`,
+      hint: `Token unter https://opentransportdata.swiss registrieren und als ${variable} eintragen.`,
+    });
+  }
+
+  // Ein Token an mehreren Diensten ist fast immer ein Kopierfehler: das Portal
+  // gibt pro Anwendung ein eigenes aus. Es kann gutgehen, deshalb nur ein
+  // Hinweis — aber ein sichtbarer, denn der Folgefehler ist ein 403, das wie
+  // ein ungültiger Schlüssel aussieht.
+  const distinct = new Set(services.map((service) => service.key).filter(Boolean));
+  if (distinct.size === 1 && services.every((service) => service.key) && !services.every((s) => s.own)) {
+    console.log(
+      '    ⚠ Alle Dienste nutzen denselben Schlüssel. opentransportdata.swiss vergibt je\n' +
+        '      Anwendung ein eigenes Token — stimmt die Zuordnung wirklich?',
+    );
+  }
   console.log('');
 
   // --- 2. Statischer Fahrplan ----------------------------------------------
-  await checkGtfsStatic(env.GTFS_STATIC_URL, apiKey);
+  await checkGtfsStatic(env.GTFS_STATIC_URL, keys.ckan);
   console.log('');
 
   // --- 3./4. Echtzeitdaten --------------------------------------------------
-  await checkRealtimeFeed('GTFS-RT TripUpdates (Verspätungen)', env.GTFS_RT_TRIP_UPDATES_URL, apiKey);
+  await checkRealtimeFeed(
+    'GTFS-RT TripUpdates (Verspätungen)',
+    env.GTFS_RT_TRIP_UPDATES_URL,
+    keys.gtfsRt,
+    TRANSIT_KEY_VARIABLES.gtfsRt,
+  );
   console.log('');
-  await checkRealtimeFeed('GTFS-RT ServiceAlerts (offizielle Störungen)', env.GTFS_RT_SERVICE_ALERTS_URL, apiKey);
+  await checkRealtimeFeed(
+    'GTFS-RT ServiceAlerts (offizielle Störungen)',
+    env.GTFS_RT_SERVICE_ALERTS_URL,
+    keys.gtfsSa,
+    TRANSIT_KEY_VARIABLES.gtfsSa,
+  );
   console.log('');
 
   // --- 5. Verbindungssuche --------------------------------------------------

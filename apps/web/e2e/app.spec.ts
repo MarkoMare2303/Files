@@ -327,6 +327,10 @@ test.describe('10 — Sicherheit', () => {
       'API_INTERNAL_SECRET',
       'SUPABASE_JWT_SECRET',
       'OPENTRANSPORTDATA_API_KEY',
+      'OPENTRANSPORTDATA_CKAN_API_KEY',
+      'OPENTRANSPORTDATA_GTFS_RT_API_KEY',
+      'OPENTRANSPORTDATA_GTFS_SA_API_KEY',
+      'OJP_API_KEY',
     ];
 
     for (const url of scripts.slice(0, 25)) {

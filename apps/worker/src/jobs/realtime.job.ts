@@ -1,4 +1,4 @@
-import type { WorkerEnv } from '@swissov/config';
+import { TRANSIT_KEY_VARIABLES, type WorkerEnv, resolveTransitApiKeys } from '@swissov/config';
 import type { Database } from '@swissov/database';
 import {
   MissingCredentialsError,
@@ -12,9 +12,14 @@ import type { Logger } from '../logger.js';
 /**
  * GTFS-Realtime-Jobs (§6/§7).
  *
- * Ohne `OPENTRANSPORTDATA_API_KEY` protokollieren die Jobs einmalig eine
- * verständliche Warnung und beenden sich, statt bei jedem Lauf Fehler zu
- * erzeugen. Der Zustand steht im Health-Endpunkt und im Admin-Dashboard.
+ * Die beiden Feeds sind bei opentransportdata.swiss GETRENNTE Dienste mit
+ * eigenen Tokens (GTFS-RT für Verspätungen, GTFS-SA für Störungsmeldungen).
+ * Deshalb prüft jeder Job seinen eigenen Schlüssel: fehlt einer, fällt genau
+ * dieser Feed aus, der andere läuft weiter.
+ *
+ * Fehlt ein Schlüssel, protokolliert der Job einmalig eine verständliche
+ * Warnung und beendet sich, statt bei jedem Lauf Fehler zu erzeugen. Der
+ * Zustand steht im Health-Endpunkt und im Admin-Dashboard.
  */
 export function createTripUpdatesJob(
   db: Database,
@@ -22,18 +27,19 @@ export function createTripUpdatesJob(
   logger: Logger,
 ): () => Promise<void> {
   let warned = false;
+  const apiKey = resolveTransitApiKeys(env).gtfsRt;
 
   return async () => {
-    if (!env.OPENTRANSPORTDATA_API_KEY) {
+    if (!apiKey) {
       if (!warned) {
         warned = true;
         logger.warn(
-          'GTFS-RT deaktiviert: OPENTRANSPORTDATA_API_KEY fehlt. Verspätungen und Ausfälle ' +
+          `GTFS-RT deaktiviert: ${TRANSIT_KEY_VARIABLES.gtfsRt} fehlt. Verspätungen und Ausfälle ` +
             'werden nicht angezeigt. Kostenloses Token: https://opentransportdata.swiss/de/register/',
         );
         await recordFeedHealth(db, 'gtfs_rt_trip_updates', {
           ok: false,
-          error: 'OPENTRANSPORTDATA_API_KEY nicht konfiguriert',
+          error: `${TRANSIT_KEY_VARIABLES.gtfsRt} nicht konfiguriert`,
         });
       }
       return;
@@ -43,7 +49,9 @@ export function createTripUpdatesJob(
       const started = Date.now();
       const feed = await fetchFeedMessage({
         url: env.GTFS_RT_TRIP_UPDATES_URL,
-        apiKey: env.OPENTRANSPORTDATA_API_KEY,
+        apiKey,
+        authScheme: env.OPENTRANSPORTDATA_AUTH_SCHEME,
+        credentialVariable: TRANSIT_KEY_VARIABLES.gtfsRt,
       });
       const result = await syncTripUpdates(db, feed);
       const durationMs = Date.now() - started;
@@ -84,17 +92,18 @@ export function createServiceAlertsJob(
   logger: Logger,
 ): () => Promise<void> {
   let warned = false;
+  const apiKey = resolveTransitApiKeys(env).gtfsSa;
 
   return async () => {
-    if (!env.OPENTRANSPORTDATA_API_KEY) {
+    if (!apiKey) {
       if (!warned) {
         warned = true;
         logger.warn(
-          'Offizielle Störungsmeldungen deaktiviert: OPENTRANSPORTDATA_API_KEY fehlt.',
+          `Offizielle Störungsmeldungen deaktiviert: ${TRANSIT_KEY_VARIABLES.gtfsSa} fehlt.`,
         );
         await recordFeedHealth(db, 'service_alerts', {
           ok: false,
-          error: 'OPENTRANSPORTDATA_API_KEY nicht konfiguriert',
+          error: `${TRANSIT_KEY_VARIABLES.gtfsSa} nicht konfiguriert`,
         });
       }
       return;
@@ -104,7 +113,9 @@ export function createServiceAlertsJob(
       const started = Date.now();
       const feed = await fetchFeedMessage({
         url: env.GTFS_RT_SERVICE_ALERTS_URL,
-        apiKey: env.OPENTRANSPORTDATA_API_KEY,
+        apiKey,
+        authScheme: env.OPENTRANSPORTDATA_AUTH_SCHEME,
+        credentialVariable: TRANSIT_KEY_VARIABLES.gtfsSa,
       });
       const result = await syncServiceAlerts(db, feed);
       const durationMs = Date.now() - started;

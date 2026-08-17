@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { loadEnvFiles, parseEnv, transitEnvSchema } from '@swissov/config';
+import { loadEnvFiles, parseEnv, resolveTransitApiKeys, transitEnvSchema } from '@swissov/config';
 import { createDatabase } from '@swissov/database';
 import { z } from 'zod';
 import { importGtfsStatic } from './gtfs/importer.js';
@@ -48,7 +48,8 @@ async function main(): Promise<void> {
     const result = await importGtfsStatic(db, {
       url,
       ...(file ? { file } : {}),
-      apiKey: env.OPENTRANSPORTDATA_API_KEY,
+      // Der Fahrplan liegt im CKAN-Portal — eigener Dienst, eigenes Token.
+      apiKey: resolveTransitApiKeys(env).ckan,
       authScheme: env.OPENTRANSPORTDATA_AUTH_SCHEME,
       force,
       log: (message) => console.log(message),

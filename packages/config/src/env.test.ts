@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseDotenv } from 'dotenv';
 import { describe, expect, it } from 'vitest';
 import {
+  TRANSIT_KEY_VARIABLES,
   apiEnvSchema,
   detectMissingIntegrations,
   parseEnv,
+  resolveTransitApiKeys,
   transitEnvSchema,
   workerEnvSchema,
 } from './env.js';
@@ -215,12 +217,112 @@ describe('OPENTRANSPORTDATA_AUTH_SCHEME', () => {
   });
 });
 
+describe('resolveTransitApiKeys', () => {
+  /**
+   * opentransportdata.swiss vergibt Tokens pro registrierter Anwendung, nicht
+   * pro Konto: CKAN, GTFS-RT, GTFS-SA und OJP sind vier getrennte Dienste mit
+   * vier getrennten Schlüsseln. Wird einer am falschen Endpunkt verwendet,
+   * antwortet das Portal mit 401/403 — ununterscheidbar von einem abgelaufenen
+   * Schlüssel. Deshalb darf die Zuordnung nicht dem Zufall überlassen bleiben.
+   */
+  it('ordnet jedem Dienst seinen eigenen Schlüssel zu', () => {
+    const keys = resolveTransitApiKeys({
+      OPENTRANSPORTDATA_CKAN_API_KEY: 'ckan-token',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt-token',
+      OPENTRANSPORTDATA_GTFS_SA_API_KEY: 'sa-token',
+      OJP_API_KEY: 'ojp-token',
+    });
+    expect(keys).toEqual({
+      ckan: 'ckan-token',
+      gtfsRt: 'rt-token',
+      gtfsSa: 'sa-token',
+      ojp: 'ojp-token',
+    });
+  });
+
+  it('nutzt den generischen Schlüssel nur, wo kein eigener gesetzt ist', () => {
+    const keys = resolveTransitApiKeys({
+      OPENTRANSPORTDATA_API_KEY: 'generisch',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt-token',
+    });
+    expect(keys.gtfsRt).toBe('rt-token');
+    expect(keys.ckan).toBe('generisch');
+    expect(keys.gtfsSa).toBe('generisch');
+  });
+
+  it('übergeht niemals einen gesetzten dienstspezifischen Schlüssel', () => {
+    // Der Rückfall darf den genaueren Wert nicht verdrängen — sonst schickt
+    // die App das CKAN-Token an den GTFS-RT-Endpunkt und umgekehrt.
+    const keys = resolveTransitApiKeys({
+      OPENTRANSPORTDATA_API_KEY: 'generisch',
+      OPENTRANSPORTDATA_CKAN_API_KEY: 'ckan-token',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt-token',
+      OPENTRANSPORTDATA_GTFS_SA_API_KEY: 'sa-token',
+    });
+    expect(keys.ckan).toBe('ckan-token');
+    expect(keys.gtfsRt).toBe('rt-token');
+    expect(keys.gtfsSa).toBe('sa-token');
+  });
+
+  it('setzt für OJP KEINEN Rückfall ein', () => {
+    // OJP ist ein eigener Endpunkt und optional. Ein geratener Schlüssel würde
+    // die Verbindungssuche als „konfiguriert, aber kaputt" erscheinen lassen,
+    // statt sie ehrlich als nicht aktiv zu melden.
+    const keys = resolveTransitApiKeys({ OPENTRANSPORTDATA_API_KEY: 'generisch' });
+    expect(keys.ojp).toBeUndefined();
+  });
+
+  it('meldet alle Dienste als leer, wenn nichts gesetzt ist', () => {
+    expect(resolveTransitApiKeys({})).toEqual({
+      ckan: undefined,
+      gtfsRt: undefined,
+      gtfsSa: undefined,
+      ojp: undefined,
+    });
+  });
+
+  it('liest die Schlüssel aus einer echten Umgebung', () => {
+    const env = parseEnv(transitEnvSchema, {
+      OPENTRANSPORTDATA_CKAN_API_KEY: 'ckan-token',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt-token',
+      OPENTRANSPORTDATA_GTFS_SA_API_KEY: 'sa-token',
+    } as NodeJS.ProcessEnv);
+    const keys = resolveTransitApiKeys(env);
+    expect(keys.ckan).toBe('ckan-token');
+    expect(keys.gtfsRt).toBe('rt-token');
+    expect(keys.gtfsSa).toBe('sa-token');
+  });
+});
+
 describe('detectMissingIntegrations', () => {
   it('meldet alle fehlenden optionalen Integrationen', () => {
     const missing = detectMissingIntegrations({});
-    expect(missing.some((entry) => entry.includes('OPENTRANSPORTDATA_API_KEY'))).toBe(true);
-    expect(missing.some((entry) => entry.includes('OJP_API_KEY'))).toBe(true);
+    // Jeder Dienst einzeln — fehlt nur GTFS-SA, fallen nicht auch die
+    // Verspätungen aus, und die Meldung soll das unterscheiden.
+    for (const variable of Object.values(TRANSIT_KEY_VARIABLES)) {
+      expect(missing.some((entry) => entry.startsWith(variable))).toBe(true);
+    }
     expect(missing.some((entry) => entry.includes('REDIS_URL'))).toBe(true);
+  });
+
+  it('meldet den einzelnen fehlenden Dienst, nicht die ganze Anbindung', () => {
+    const missing = detectMissingIntegrations({
+      OPENTRANSPORTDATA_CKAN_API_KEY: 'ckan',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt',
+      OJP_API_KEY: 'ojp',
+    });
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.gtfsSa))).toBe(true);
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.ckan))).toBe(false);
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.gtfsRt))).toBe(false);
+  });
+
+  it('akzeptiert den generischen Schlüssel für die drei GTFS-Dienste', () => {
+    const missing = detectMissingIntegrations({ OPENTRANSPORTDATA_API_KEY: 'generisch' });
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.ckan))).toBe(false);
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.gtfsRt))).toBe(false);
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.gtfsSa))).toBe(false);
+    // OJP kennt keinen Rückfall und bleibt gemeldet.
+    expect(missing.some((entry) => entry.startsWith(TRANSIT_KEY_VARIABLES.ojp))).toBe(true);
   });
 
   it('meldet nichts, wenn alles konfiguriert ist', () => {
@@ -228,7 +330,9 @@ describe('detectMissingIntegrations', () => {
       SUPABASE_URL: 'https://x.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'key',
       SUPABASE_JWT_SECRET: 'secret',
-      OPENTRANSPORTDATA_API_KEY: 'key',
+      OPENTRANSPORTDATA_CKAN_API_KEY: 'ckan',
+      OPENTRANSPORTDATA_GTFS_RT_API_KEY: 'rt',
+      OPENTRANSPORTDATA_GTFS_SA_API_KEY: 'sa',
       OJP_API_KEY: 'key',
       REDIS_URL: 'redis://localhost:6379',
       WEB_PUSH_VAPID_PUBLIC_KEY: 'public',

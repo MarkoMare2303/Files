@@ -82,7 +82,21 @@ export const supabaseEnvSchema = z.object({
 });
 
 export const transitEnvSchema = z.object({
+  /**
+   * Rückfall für alle Dienste von opentransportdata.swiss.
+   *
+   * Das Portal vergibt KEINEN Schlüssel für alles: pro Dienst wird eine eigene
+   * Anwendung registriert (eigene App-ID, eigenes Token). Wer die Tokens
+   * getrennt hat, setzt die dienstspezifischen Variablen unten; dieser Wert
+   * greift nur, wo keine gesetzt ist.
+   */
   OPENTRANSPORTDATA_API_KEY: optionalNonEmpty,
+  /** CKAN-Portal — Download des GTFS-Static-Datensatzes (Fahrplan). */
+  OPENTRANSPORTDATA_CKAN_API_KEY: optionalNonEmpty,
+  /** GTFS-RT — Trip Updates (Verspätungen, Ausfälle). */
+  OPENTRANSPORTDATA_GTFS_RT_API_KEY: optionalNonEmpty,
+  /** GTFS-SA — Service Alerts (offizielle Störungsmeldungen). */
+  OPENTRANSPORTDATA_GTFS_SA_API_KEY: optionalNonEmpty,
   /**
    * Authentifizierungsverfahren gegenüber opentransportdata.swiss.
    *
@@ -255,12 +269,70 @@ export function parseEnv<S extends z.ZodTypeAny>(
   return result.data;
 }
 
+/**
+ * Die Zugangsdaten von opentransportdata.swiss, nach Dienst getrennt.
+ *
+ * Das Portal vergibt Tokens pro registrierter Anwendung, nicht pro Konto — der
+ * Schlüssel für GTFS-RT öffnet den CKAN-Download nicht und umgekehrt. Wer die
+ * Dienste verwechselt, bekommt ein HTTP 401/403, das wie ein abgelaufener
+ * Schlüssel aussieht, aber keiner ist.
+ */
+export interface TransitApiKeys {
+  /** CKAN-Portal — Download des GTFS-Static-Datensatzes. */
+  ckan: string | undefined;
+  /** GTFS-RT — Trip Updates (Verspätungen, Ausfälle). */
+  gtfsRt: string | undefined;
+  /** GTFS-SA — Service Alerts (offizielle Störungsmeldungen). */
+  gtfsSa: string | undefined;
+  /** OJP 2.0 — Verbindungssuche (optional). */
+  ojp: string | undefined;
+}
+
+/** Die Umgebungsvariable, aus der ein Dienst seinen Schlüssel bezieht. */
+export const TRANSIT_KEY_VARIABLES: Record<keyof TransitApiKeys, string> = {
+  ckan: 'OPENTRANSPORTDATA_CKAN_API_KEY',
+  gtfsRt: 'OPENTRANSPORTDATA_GTFS_RT_API_KEY',
+  gtfsSa: 'OPENTRANSPORTDATA_GTFS_SA_API_KEY',
+  ojp: 'OJP_API_KEY',
+};
+
+/**
+ * Löst die dienstspezifischen Schlüssel auf, mit Rückfall auf den generischen.
+ *
+ * Der Rückfall existiert für zwei Fälle: bestehende Installationen, die vor
+ * der Aufteilung nur `OPENTRANSPORTDATA_API_KEY` gesetzt haben, und Portale,
+ * bei denen ein Token tatsächlich mehrere Dienste abdeckt. Er darf nie dazu
+ * führen, dass ein gesetzter dienstspezifischer Schlüssel übergangen wird.
+ */
+export function resolveTransitApiKeys(env: {
+  OPENTRANSPORTDATA_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_CKAN_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_GTFS_RT_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_GTFS_SA_API_KEY?: string | undefined;
+  OJP_API_KEY?: string | undefined;
+}): TransitApiKeys {
+  const fallback = env.OPENTRANSPORTDATA_API_KEY;
+  return {
+    ckan: env.OPENTRANSPORTDATA_CKAN_API_KEY ?? fallback,
+    gtfsRt: env.OPENTRANSPORTDATA_GTFS_RT_API_KEY ?? fallback,
+    gtfsSa: env.OPENTRANSPORTDATA_GTFS_SA_API_KEY ?? fallback,
+    // OJP ist ein eigener Dienst mit eigenem Endpunkt. Ein generischer
+    // Schlüssel wird hier NICHT eingesetzt: OJP ist optional, und ein
+    // stillschweigend falscher Schlüssel würde die Verbindungssuche als
+    // „konfiguriert, aber kaputt" erscheinen lassen statt als „nicht aktiv".
+    ojp: env.OJP_API_KEY,
+  };
+}
+
 /** Ermittelt, welche optionalen externen Integrationen mangels Credentials inaktiv sind. */
 export function detectMissingIntegrations(env: {
   SUPABASE_URL?: string | undefined;
   SUPABASE_SERVICE_ROLE_KEY?: string | undefined;
   SUPABASE_JWT_SECRET?: string | undefined;
   OPENTRANSPORTDATA_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_CKAN_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_GTFS_RT_API_KEY?: string | undefined;
+  OPENTRANSPORTDATA_GTFS_SA_API_KEY?: string | undefined;
   OJP_API_KEY?: string | undefined;
   REDIS_URL?: string | undefined;
   WEB_PUSH_VAPID_PUBLIC_KEY?: string | undefined;
@@ -272,9 +344,16 @@ export function detectMissingIntegrations(env: {
     missing.push('SUPABASE_SERVICE_ROLE_KEY (Account-Löschung via Auth-Admin-API deaktiviert)');
   if (!env.SUPABASE_JWT_SECRET && !env.SUPABASE_URL)
     missing.push('SUPABASE_JWT_SECRET (Token-Verifikation nicht möglich → nur Gastzugriff)');
-  if (!env.OPENTRANSPORTDATA_API_KEY)
-    missing.push('OPENTRANSPORTDATA_API_KEY (GTFS-RT & offizielle Störungen deaktiviert)');
-  if (!env.OJP_API_KEY) missing.push('OJP_API_KEY (Verbindungssuche via OJP deaktiviert)');
+  // Jeder Dienst hat sein eigenes Token; fehlt eines, fällt genau ein Baustein
+  // aus — nicht die ganze Anbindung. Deshalb wird jeder einzeln gemeldet.
+  const keys = resolveTransitApiKeys(env);
+  if (!keys.ckan)
+    missing.push(`${TRANSIT_KEY_VARIABLES.ckan} (kein Fahrplan-Download — GTFS-Static)`);
+  if (!keys.gtfsRt)
+    missing.push(`${TRANSIT_KEY_VARIABLES.gtfsRt} (keine Verspätungen und Ausfälle — GTFS-RT)`);
+  if (!keys.gtfsSa)
+    missing.push(`${TRANSIT_KEY_VARIABLES.gtfsSa} (keine offiziellen Störungen — GTFS-SA)`);
+  if (!keys.ojp) missing.push(`${TRANSIT_KEY_VARIABLES.ojp} (Verbindungssuche via OJP deaktiviert)`);
   if (!env.REDIS_URL) missing.push('REDIS_URL (In-Memory-Cache statt Redis — nicht clusterfähig)');
   if (!env.WEB_PUSH_VAPID_PUBLIC_KEY || !env.WEB_PUSH_VAPID_PRIVATE_KEY)
     missing.push('WEB_PUSH_VAPID_PUBLIC_KEY/PRIVATE_KEY (Push-Benachrichtigungen deaktiviert)');

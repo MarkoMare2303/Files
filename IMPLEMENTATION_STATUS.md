@@ -70,8 +70,8 @@ dieser Umgebung verfügbar).
 | Haltestellen, Linien, Fahrten, Halte, Kalender, Shapes | ✅ | |
 | Geo-Indizes (GIST), Trigramm-Indizes | ✅ | |
 | **Import gegen die echte Schweizer Quelle** | ⚠️ | Pipeline end-to-end verifiziert (siehe oben). Der Zugriff auf `opentransportdata.swiss` ist in dieser Umgebung durch die Netzwerkrichtlinie gesperrt; Laufzeit und Speicherbedarf beim Gesamtdatensatz sind deshalb geschätzt |
-| GTFS-RT Trip Updates (Protocol Buffers) | ⚠️ | Benötigt `OPENTRANSPORTDATA_API_KEY` |
-| GTFS-RT Service Alerts | ⚠️ | Benötigt `OPENTRANSPORTDATA_API_KEY` |
+| GTFS-RT Trip Updates (Protocol Buffers) | ⚠️ | Benötigt `OPENTRANSPORTDATA_GTFS_RT_API_KEY` |
+| GTFS-RT Service Alerts | ⚠️ | Benötigt `OPENTRANSPORTDATA_GTFS_SA_API_KEY` |
 | Retry, Backoff, `Retry-After`, Redirects, Timeouts | ✅ | Unit-getestet |
 | Feed-Health-Überwachung | ✅ | |
 | OJP-Verbindungssuche (Umstiege) | ⚠️ | Benötigt `OJP_API_KEY`; XML-Aufbau und Parser gegen Fixture getestet |
@@ -200,8 +200,8 @@ Entfernt wird `apps/mobile` erst, wenn alle Zeilen in
 | Job | Status |
 |-----|--------|
 | GTFS-Static-Import nach Zeitplan | ✅ |
-| GTFS-RT-Poller | ⚠️ Benötigt `OPENTRANSPORTDATA_API_KEY` |
-| Service-Alerts-Poller | ⚠️ Benötigt `OPENTRANSPORTDATA_API_KEY` |
+| GTFS-RT-Poller | ⚠️ Benötigt `OPENTRANSPORTDATA_GTFS_RT_API_KEY` |
+| Service-Alerts-Poller | ⚠️ Benötigt `OPENTRANSPORTDATA_GTFS_SA_API_KEY` |
 | Meldungsablauf | ✅ |
 | Bereinigung verwaister Fahrt-Sitzungen | ✅ |
 | Trust-Score-Neuberechnung | ✅ |
@@ -231,7 +231,9 @@ Entfernt wird `apps/mobile` erst, wenn alle Zeilen in
 
 | Credential | Kosten | Wofür | Ohne das Credential |
 |------------|--------|-------|---------------------|
-| `OPENTRANSPORTDATA_API_KEY` | kostenlos | Verspätungen, Ausfälle, offizielle Störungen | Nur Fahrplanzeiten; die App weist darauf hin |
+| `OPENTRANSPORTDATA_CKAN_API_KEY` | kostenlos | Fahrplan-Download (GTFS Static) | Kein Fahrplan — die App hat keine Daten |
+| `OPENTRANSPORTDATA_GTFS_RT_API_KEY` | kostenlos | Verspätungen, Ausfälle | Nur Fahrplanzeiten; die App weist darauf hin |
+| `OPENTRANSPORTDATA_GTFS_SA_API_KEY` | kostenlos | offizielle Störungsmeldungen | Nur Community-Meldungen; die App weist darauf hin |
 | `OJP_API_KEY` | kostenlos | Verbindungen mit Umstieg | Nur Direktverbindungen; Einschränkung wird angezeigt |
 | Supabase-Projekt | kostenlose Stufe genügt zum Start | Anmeldung, Realtime, Admin-Portal | Gastmodus: alles lesen, nichts melden |
 | `WEB_PUSH_VAPID_*` | kostenlos, selbst erzeugt (`pnpm push:keys`) | Web Push auf allen Plattformen | Der Schalter erscheint gar nicht erst, mit Begründung |

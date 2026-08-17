@@ -79,10 +79,19 @@ ehrlich statt zu scheitern — die Oberfläche sagt dann, was gerade nicht verf�
 
 **Ohne diesen Zugang gibt es keine Fahrplandaten. Das ist der wichtigste Punkt der Liste.**
 
+Das Portal vergibt Tokens **pro registrierter Anwendung**, nicht pro Konto: für
+jeden Dienst wird eine eigene Anwendung angelegt, mit eigener App-ID und eigenem
+Token. Ein Token am falschen Endpunkt antwortet mit 401/403 und sieht dabei aus
+wie ein abgelaufener Schlüssel.
+
 ```bash
 # 1. Kostenlos registrieren:      https://opentransportdata.swiss
-# 2. API-Schlüssel in .env eintragen:
-OPENTRANSPORTDATA_API_KEY=…
+# 2. Je Dienst eine Anwendung anlegen und das Token in .env eintragen:
+OPENTRANSPORTDATA_CKAN_API_KEY=…      # Fahrplan-Download (GTFS Static)
+OPENTRANSPORTDATA_GTFS_RT_API_KEY=…   # Verspätungen und Ausfälle
+OPENTRANSPORTDATA_GTFS_SA_API_KEY=…   # offizielle Störungsmeldungen
+#    Nicht verwendet: siri_pt_plan, siri_et_plan.
+#    Der Token-Hash des Portals wird nirgends eingetragen.
 
 # 3. Erreichbarkeit prüfen (schreibt nichts, dauert Sekunden):
 pnpm gtfs:verify-production

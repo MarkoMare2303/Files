@@ -7,13 +7,34 @@ und Hunderte weitere.
 
 ## Zugangsdaten
 
-| Variable | Wofür | Beschaffung |
-|----------|-------|-------------|
-| `OPENTRANSPORTDATA_API_KEY` | GTFS-RT (Verspätungen, Ausfälle) und Service Alerts | Kostenloses Konto unter <https://opentransportdata.swiss/de/register/>, danach unter „Meine Konten" ein API-Token erzeugen |
-| `OJP_API_KEY` | Verbindungssuche mit Umstiegen | Separater Token für den OJP-Endpunkt derselben Plattform |
+Das Portal vergibt Tokens **pro registrierter Anwendung**, nicht pro Konto. Für
+jeden Dienst wird unter „Meine Konten" eine eigene Anwendung angelegt — mit
+eigener App-ID und eigenem Token. Ein Token am falschen Endpunkt antwortet mit
+401/403 und sieht dabei aus wie ein abgelaufener Schlüssel.
 
-Der **GTFS-Static-Download braucht keinen Key** — der Import funktioniert ohne
-jede Registrierung.
+| Variable | Dienst im Portal | Wofür |
+|----------|------------------|-------|
+| `OPENTRANSPORTDATA_CKAN_API_KEY` | CKAN | Fahrplan-Download (GTFS Static) |
+| `OPENTRANSPORTDATA_GTFS_RT_API_KEY` | GTFS-RT | Verspätungen, Ausfälle |
+| `OPENTRANSPORTDATA_GTFS_SA_API_KEY` | GTFS-SA | offizielle Störungsmeldungen |
+| `OJP_API_KEY` | OJP 2.0 | Verbindungssuche mit Umstiegen (optional) |
+
+Nicht verwendet: **SIRI-PT** (`siri_pt_plan`) und **SIRI-ET** (`siri_et_plan`) —
+die App bezieht Soll- und Ist-Fahrplan aus den GTFS-Feeds.
+
+Der **Token-Hash** neben jedem Token dient dem Wiedererkennen im Portal, nicht
+der Authentifizierung; er wird nirgends eingetragen.
+
+Wer nur ein Token hat, kann ersatzweise `OPENTRANSPORTDATA_API_KEY` setzen — der
+Wert greift überall dort, wo keine dienstspezifische Variable gesetzt ist. Für
+`OJP_API_KEY` gilt dieser Rückfall bewusst nicht: OJP ist optional, und ein
+stillschweigend falscher Schlüssel liesse die Verbindungssuche als
+„konfiguriert, aber kaputt" erscheinen statt als „nicht aktiv".
+
+Ob der Fahrplan-Permalink im Einzelfall auch ohne Token ausgeliefert wird, hängt
+vom Datensatz ab — verlassen sollte man sich nicht darauf. `pnpm
+gtfs:verify-production` zeigt für jeden Dienst, welcher Schlüssel verwendet wird
+und ob er akzeptiert wird.
 
 Ohne diese Keys läuft die Anwendung weiter, mit klar benannten Einschränkungen:
 keine Verspätungen, keine offiziellen Störungen, Verbindungssuche nur für
