@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -130,9 +139,23 @@ for (const [pkg, folder] of [
   ['@swissov/worker', 'worker'],
 ]) {
   step(`${pkg} → ${folder}/`);
-  run('pnpm', ['deploy', '--legacy', '--prod', `--filter=${pkg}`, join(outDir, folder)]);
+  // `node-linker=hoisted` schreibt echte Verzeichnisse statt der üblichen
+  // pnpm-Symlinks. Das ist hier entscheidend: das Bündel wird als Archiv
+  // ausgeliefert, und nicht jedes Entpackprogramm — vor allem nicht die von
+  // Windows und mancher Weboberfläche — stellt Symlinks wieder her. Ein Bündel
+  // mit toten Verweisen sieht vollständig aus und startet trotzdem nicht.
+  run('pnpm', [
+    'deploy',
+    '--legacy',
+    '--prod',
+    '--config.node-linker=hoisted',
+    `--filter=${pkg}`,
+    join(outDir, folder),
+  ]);
   // Quellen und Testkonfiguration gehören nicht auf einen Webserver.
-  for (const junk of ['src', 'tsconfig.json', 'vitest.config.ts']) {
+  // `node_modules/.bin` enthält nur Symlinks auf Kommandozeilenwerkzeuge; die
+  // Dienste starten über `node dist/index.js` und brauchen sie nie.
+  for (const junk of ['src', 'tsconfig.json', 'vitest.config.ts', 'node_modules/.bin']) {
     rmSync(join(outDir, folder, junk), { recursive: true, force: true });
   }
 }
@@ -153,7 +176,20 @@ for (const [app, folder] of [
   }
   step(`apps/${app} → ${folder}/`);
   const target = join(outDir, folder);
-  cpSync(standalone, target, { recursive: true });
+  // `cp -a` und NICHT `cpSync`. Zwei Fallstricke stecken hier:
+  //
+  // 1. Die Symlinks müssen bleiben. Sie aufzulösen liegt nahe — ein Archiv
+  //    ohne Symlinks lässt sich überall auspacken — zerstört aber die
+  //    Modulauflösung: pnpm kodiert den Abhängigkeitsgraphen in den Verweisen.
+  //    Ein Paket findet seine Abhängigkeiten als Geschwister in
+  //    `.pnpm/<paket>/node_modules/`; anderswohin kopiert verliert es sie und
+  //    der Server startet mit MODULE_NOT_FOUND.
+  // 2. Sie müssen RELATIV bleiben. `cpSync` schreibt sie als absolute Pfade
+  //    der Baumaschine — im Bündel sehen sie heil aus, zeigen aber auf ein
+  //    Verzeichnis, das es auf dem Zielserver nicht gibt. Auf der Baumaschine
+  //    selbst fällt das nicht auf, weil der Quellbaum dort noch liegt.
+  mkdirSync(target, { recursive: true });
+  run('cp', ['-a', `${standalone}/.`, target]);
 
   // Next kopiert `.next/static` und `public/` bewusst nicht in die
   // standalone-Ausgabe — sie sollen üblicherweise über ein CDN laufen. Ohne sie
@@ -717,6 +753,35 @@ if (missing.length > 0) {
   process.exit(1);
 }
 console.log(`  ✓ alle ${required.length} erwarteten Bestandteile vorhanden`);
+
+/**
+ * Kein Symlink darf aus dem Bündel hinauszeigen.
+ *
+ * Die Next.js-Ausgabe braucht relative Symlinks — ohne sie findet Node die
+ * Module nicht. Ein ABSOLUTER Verweis dagegen zeigt auf einen Pfad der
+ * Baumaschine und ist auf dem Zielserver tot. Der Unterschied ist im Bündel
+ * unsichtbar: beides sieht nach einem intakten Link aus, und solange der
+ * Quellbaum auf derselben Maschine liegt, funktioniert sogar der absolute.
+ * Erst auf dem fremden Server bricht es — als MODULE_NOT_FOUND, nicht als
+ * erkennbarer Kopierfehler.
+ */
+const absoluteLinks = execFileSync('find', [outDir, '-type', 'l'])
+  .toString()
+  .split('\n')
+  .filter(Boolean)
+  .filter((link) => readlinkSync(link).startsWith('/'));
+
+if (absoluteLinks.length > 0) {
+  console.error(`✗ ${absoluteLinks.length} Symlinks zeigen auf absolute Pfade:`);
+  for (const link of absoluteLinks.slice(0, 5)) {
+    console.error(`    ${link.replace(outDir, '')} → ${readlinkSync(link)}`);
+  }
+  console.error('  Auf dem Zielserver gibt es diese Pfade nicht — das Bündel wäre unbrauchbar.');
+  process.exit(1);
+}
+
+const linkCount = execFileSync('find', [outDir, '-type', 'l']).toString().split('\n').filter(Boolean).length;
+console.log(`  ✓ alle ${linkCount} Symlinks zeigen relativ ins Bündel`);
 
 // ---------------------------------------------------------------------------
 // 11. Ergebnis
