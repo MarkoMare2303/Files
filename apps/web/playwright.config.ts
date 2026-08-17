@@ -76,7 +76,14 @@ export default defineConfig({
     // BAUZEIT stimmen — Next.js ersetzt die Variable durch ein Literal. Ein
     // Build mit einem anderen Wert lässt die API-Attrappe der Tests ins Leere
     // laufen, und die datenabhängigen Szenarien scheitern scheinbar grundlos.
-    command: `pnpm run build && pnpm run start -- -p ${PORT}`,
+    // Der Port kommt ausschliesslich über `WEB_PORT` (siehe `env` unten) — das
+    // `start`-Skript wertet ihn aus. Ein zusätzliches `-- -p <port>` erzeugte
+    // `next start -p <port> -- -p <port>`; Next las das zweite `-p` als
+    // Projektverzeichnis und brach mit „Invalid project directory" ab. Bemerkt
+    // wurde das nie, weil lokal fast immer schon ein Server lief und
+    // `reuseExistingServer` diesen Befehl dann gar nicht erst ausführt — in CI
+    // hätte die E2E-Suite nicht starten können.
+    command: 'pnpm run build && pnpm run start',
     url: BASE_URL,
     // Lokal wird ein bereits laufender Server wiederverwendet. Wurde der mit
     // anderen NEXT_PUBLIC_*-Werten gebaut, gilt derselbe Fallstrick — im

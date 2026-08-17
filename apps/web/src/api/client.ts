@@ -58,8 +58,27 @@ export interface RequestOptions {
   allowAnonymous?: boolean;
 }
 
+/**
+ * Basis für relative API-Pfade.
+ *
+ * `NEXT_PUBLIC_API_URL` darf ein Pfad sein (`/api`) statt einer vollständigen
+ * URL. Das ist der Regelfall bei einer Auslieferung, in der die API unter
+ * derselben Domain weitergeleitet wird — und der einzige Weg, ein gebautes
+ * Bündel ohne Neubau auf eine andere Domain zu legen: Next.js setzt
+ * `NEXT_PUBLIC_*` zur Bauzeit als Literal ein, eine absolute URL wäre also fest
+ * eingebacken.
+ *
+ * Ist `config.apiUrl` absolut, bleibt die Basis wirkungslos — `new URL()`
+ * ignoriert sie dann.
+ */
+function apiBase(): string {
+  if (typeof window !== 'undefined') return window.location.origin;
+  // Serverseitiges Rendern ohne absolute URL: dort gibt es kein `window`.
+  return 'http://localhost';
+}
+
 function buildUrl(path: string, query?: RequestOptions['query']): string {
-  const url = new URL(`${config.apiUrl}${path}`);
+  const url = new URL(`${config.apiUrl}${path}`, apiBase());
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null) continue;

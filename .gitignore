@@ -1,5 +1,13 @@
 node_modules/
 dist/
+# Auslieferungsbündel — wird von scripts/build-deploy-bundle.mjs erzeugt und
+# enthält node_modules. Gehört nicht ins Repository.
+dist-deploy/
+swissov-deploy*.tar.gz
+
+# Playwright-Berichte und Fehlerartefakte eines Laufs
+playwright-report/
+test-results/
 build/
 .next/
 out/

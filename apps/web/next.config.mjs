@@ -61,6 +61,18 @@ const nextConfig = {
   transpilePackages: ['@swissov/ui', '@swissov/types', '@swissov/shared'],
   poweredByHeader: false,
 
+  /**
+   * Selbsttragende Ausgabe für die Auslieferung.
+   *
+   * `standalone` legt unter `.next/standalone` einen Server samt genau der
+   * benötigten Abhängigkeiten ab. Ohne diese Zeile bräuchte der Zielserver das
+   * gesamte pnpm-Workspace mitsamt `workspace:*`-Verweisen — die sich auf einem
+   * Webserver nicht auflösen lassen, weil es diese Pakete in keiner Registry
+   * gibt. Siehe `scripts/build-deploy-bundle.mjs`.
+   */
+  output: 'standalone',
+  outputFileTracingRoot: new URL('../../', import.meta.url).pathname,
+
   async headers() {
     return [
       {

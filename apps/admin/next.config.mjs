@@ -5,6 +5,10 @@ const nextConfig = {
   transpilePackages: ['@swissov/ui', '@swissov/types'],
   poweredByHeader: false,
 
+  // Selbsttragende Ausgabe — siehe apps/web/next.config.mjs.
+  output: 'standalone',
+  outputFileTracingRoot: new URL('../../', import.meta.url).pathname,
+
   async headers() {
     return [
       {
