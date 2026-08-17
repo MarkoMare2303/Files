@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +37,20 @@ function arg(flag, fallback) {
 const outDir = resolve(root, arg('--out', 'dist-deploy'));
 const skipBuild = process.argv.includes('--skip-build');
 
+/**
+ * Legt eine ausgefüllte `.env` ins Bündel.
+ *
+ *     node scripts/build-deploy-bundle.mjs --with-env pfad/zur/.env
+ *
+ * Standardmässig verweigert das Skript das (siehe Abschlussprüfung): ein
+ * Bündel wird kopiert, weitergegeben und archiviert, und Zugangsdaten haben
+ * darin nichts verloren. Wer es trotzdem will — weil das Bündel auf genau
+ * einen eigenen Server geht und dort nichts mehr eingerichtet werden soll —
+ * muss diesen Weg ausdrücklich wählen. Die Datei landet mit Rechten 600 und
+ * das Skript sagt beim Bauen deutlich, was es getan hat.
+ */
+const withEnv = arg('--with-env', undefined);
+
 function run(command, args, options = {}) {
   execFileSync(command, args, { cwd: root, stdio: 'inherit', ...options });
 }
@@ -55,18 +69,47 @@ if (nodeMajor < 20) {
 // ---------------------------------------------------------------------------
 // 1. Bauen
 // ---------------------------------------------------------------------------
+/**
+ * Liest die `NEXT_PUBLIC_*`-Werte aus einer .env für den Bau.
+ *
+ * Next.js ersetzt diese Variablen zur BAUZEIT durch Literale. Sie später in die
+ * Laufzeit-`.env` zu schreiben hat keinerlei Wirkung — der Browser bekäme
+ * weiterhin den Wert von damals. Fehlen sie beim Bauen, meldet die PWA
+ * „Anmeldung ist nicht konfiguriert", obwohl die .env vollständig aussieht.
+ * Deshalb kommen sie aus derselben Datei wie die Laufzeitwerte.
+ */
+function publicValuesFrom(envFile) {
+  if (!envFile) return {};
+  const source = resolve(root, envFile);
+  if (!existsSync(source)) return {};
+  const values = {};
+  for (const line of readFileSync(source, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('NEXT_PUBLIC_')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const value = trimmed.slice(eq + 1).trim();
+    if (value.length > 0) values[trimmed.slice(0, eq)] = value;
+  }
+  return values;
+}
+
 if (skipBuild) {
   console.log('▸ Bauen übersprungen (--skip-build)');
 } else {
   step('Anwendungen bauen');
-  // Die Next.js-Apps lesen NEXT_PUBLIC_* zur BAUZEIT. `/api` als relativer
-  // Pfad hält das Bündel domänenunabhängig — der Webserver leitet /api an die
-  // API weiter. Wer die API auf einer eigenen Domain betreibt, setzt hier eine
-  // absolute URL und baut neu.
+  const publicValues = publicValuesFrom(withEnv);
+  for (const [key, value] of Object.entries(publicValues)) {
+    console.log(`  ${key} = ${value.length > 40 ? `${value.slice(0, 32)}…` : value}`);
+  }
+  // `/api` als relativer Pfad hält das Bündel domänenunabhängig — der
+  // Webserver leitet /api an die API weiter. Wer die API auf einer eigenen
+  // Domain betreibt, setzt eine absolute URL und baut neu.
   run('pnpm', ['build'], {
     env: {
       ...process.env,
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? '/api',
+      ...publicValues,
+      NEXT_PUBLIC_API_URL: publicValues.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '/api',
       NODE_ENV: 'production',
     },
   });
@@ -256,6 +299,20 @@ exec node run-tool.mjs "node_modules/${entry}"${args.map((a) => ` ${a}`).join(''
   writeFileSync(join(binDir, `${name}.sh`), script, { mode: 0o755 });
 }
 
+// Einrichtung und Selbsttest liegen als echte Dateien im Repository — sie sind
+// zu umfangreich, um sie hier als Zeichenkette zu führen, und lassen sich so
+// unabhängig prüfen.
+// `cpSync` kennt kein Rechte-Argument (`mode` ist dort ein Kopier-Flag) —
+// deshalb kopieren und danach ausführbar machen.
+for (const [quelle, ziel] of [
+  [join(root, 'scripts', 'deploy', 'install.sh'), join(outDir, 'install.sh')],
+  [join(root, 'scripts', 'deploy', 'selftest.sh'), join(binDir, 'selftest.sh')],
+  [join(root, 'scripts', 'deploy', 'configure-env.mjs'), join(binDir, 'configure-env.mjs')],
+]) {
+  cpSync(quelle, ziel);
+  chmodSync(ziel, 0o755);
+}
+
 // ---------------------------------------------------------------------------
 // 7. systemd-Unit für den Worker
 // ---------------------------------------------------------------------------
@@ -313,7 +370,12 @@ LOG_LEVEL=info
 # --- Datenbank ---------------------------------------------------------------
 # Eigene PostgreSQL 16 mit PostGIS 3.4. Der Schweizer Fahrplan belegt rund 8 GB;
 # mindestens 20 GB freier Platz einplanen.
-DATABASE_URL=postgresql://benutzer:passwort@127.0.0.1:5432/swissov
+#
+# Aufbau:  postgresql://<benutzer>:<pw>@<host>:5432/<datenbank>
+# Beispiel: postgresql://swissov:geheim@127.0.0.1:5432/swissov
+#
+# install.sh trägt den Wert ein, wenn er beim Aufruf mitgegeben wird.
+DATABASE_URL=
 
 # --- API ---------------------------------------------------------------------
 API_PORT=3001
@@ -348,6 +410,20 @@ WEB_PUSH_SUBJECT=mailto:push@DEINE-DOMAIN
 # Plesk/Passenger setzt PORT selbst; diese Werte gelten beim direkten Start.
 PORT=3002
 ADMIN_PORT=3000
+WORKER_PORT=3003
+
+# --- Werte für den Browser (BAUZEIT!) ---------------------------------------
+# ACHTUNG: Diese Zeilen wirken NICHT zur Laufzeit. Next.js ersetzt sie beim
+# Bauen durch Literale — sie stehen bereits im ausgelieferten JavaScript. Eine
+# Änderung hier bleibt wirkungslos; dafür muss das Bündel neu gebaut werden:
+#
+#     node scripts/build-deploy-bundle.mjs --with-env <diese-datei>
+#
+# Sie stehen hier trotzdem, damit ein Neubau dieselben Werte verwendet.
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_MAP_TILE_URL=https://vectortiles.geo.admin.ch/styles/ch.swisstopo.basemap.vt/style.json
+NEXT_PUBLIC_API_URL=/api
 `,
 );
 
@@ -366,6 +442,26 @@ Build auf dem Server.** Nötig ist Node.js 20 oder neuer.
 
 ---
 
+## Kurzfassung
+
+    ./install.sh
+
+Das Skript prüft die Voraussetzungen, erzeugt alle Geheimnisse, legt das
+Datenbankschema an, importiert auf Wunsch den Fahrplan und beweist am Ende mit
+einem Selbsttest, dass API und PWA wirklich antworten. Es ist mehrfach
+ausführbar und überschreibt keine vorhandene \`.env\`.
+
+**Zwei Dinge kann kein Skript erledigen** — sie stehen unten ausführlich:
+
+1. **PostGIS installieren.** Braucht root auf dem Server. Ohne PostGIS
+   scheitert die erste Migration. \`install.sh\` prüft das als Erstes und sagt
+   genau, was fehlt.
+2. **Plesk die drei Dienste bekannt machen.** Drei Einträge unter „Node.js"
+   und eine nginx-Weiterleitung — \`install.sh\` druckt sie am Ende zum
+   Abschreiben aus.
+
+---
+
 ## Was hier liegt
 
 | Ordner | Was es ist | Wie es läuft |
@@ -373,10 +469,11 @@ Build auf dem Server.** Nötig ist Node.js 20 oder neuer.
 | \`api/\` | REST-API (Fastify) | Plesk-Node-App, Startdatei \`app.mjs\` |
 | \`web/\` | die PWA (Next.js) | Plesk-Node-App, Startdatei \`app.mjs\` |
 | \`admin/\` | Moderationsportal (Next.js) | Plesk-Node-App, eigene Subdomain |
-| \`worker/\` | Hintergrunddienst | **systemd**, nicht Passenger — siehe unten |
-| \`bin/\` | Migration, Seed, Fahrplanimport | von Hand über SSH |
-| \`systemd/\` | Unit-Datei für den Worker | einmal einrichten |
-| \`.env.example\` | Konfigurationsvorlage | nach \`.env\` kopieren |
+| \`worker/\` | Hintergrunddienst | Plesk-Node-App oder systemd — siehe 7. |
+| \`install.sh\` | richtet alles ein | einmal ausführen |
+| \`bin/\` | Migration, Seed, Import, Selbsttest | von Hand über SSH |
+| \`systemd/\` | Unit-Datei für den Worker | nur ohne Plesk-Node-App nötig |
+| \`.env.example\` | Konfigurationsvorlage | \`install.sh\` füllt sie aus |
 
 ---
 
@@ -479,12 +576,19 @@ Domain. Soll die API unter einer eigenen Domain laufen, muss die PWA mit
 \`NEXT_PUBLIC_API_URL=https://api.example.ch\` **neu gebaut** werden — Next.js
 setzt diese Werte zur Bauzeit ein.
 
-### 7. Worker einrichten (nicht über Plesk)
+### 7. Worker
 
-Der Worker ist keine Webanwendung; Passenger startet ihn nur bei einer Anfrage
-und beendet ihn wieder. Er muss dauerhaft laufen — ohne ihn: **keine
-Verspätungen, keine Störungsmeldungen, keine Benachrichtigungen, keine
-Aufräumläufe.**
+Ohne ihn gibt es **keine Verspätungen, keine Störungsmeldungen, keine
+Benachrichtigungen und keine Aufräumläufe** — die App zeigt dann nur
+Fahrplanzeiten und sagt das auch.
+
+Der Worker bringt einen eigenen Health-Endpunkt mit und lässt sich deshalb wie
+die anderen beiden als Plesk-Node-App eintragen (Application Root
+\`swissov/worker\`, Startup File \`app.mjs\`). Das ist der einfachere Weg und
+braucht kein root.
+
+Wer root hat, kann ihn stattdessen als Systemdienst führen — das überlebt auch
+einen Neustart ohne Web-Anfrage:
 
     sudo cp systemd/swissov-worker.service /etc/systemd/system/
     sudo nano /etc/systemd/system/swissov-worker.service   # User + Pfad anpassen
@@ -492,14 +596,18 @@ Aufräumläufe.**
     sudo systemctl enable --now swissov-worker
     sudo journalctl -u swissov-worker -f
 
-Erlaubt der Hoster kein systemd, ist ein Prozessmanager im Benutzerkontext die
-Alternative (\`pm2 start app.mjs --name swissov-worker\` im Ordner \`worker/\`).
-
 ### 8. Prüfen
+
+    ./bin/selftest.sh
+
+Startet API und PWA auf freien Ports, prüft Health, Bereitschaft,
+Datenbankverbindung, Haltestellensuche, Manifest und Service Worker — und
+beendet beide wieder. Ein laufender Betrieb wird dabei nicht gestört.
+
+Danach über die echte Domain:
 
     curl https://DEINE-DOMAIN/api/health          # {"status":"ok"}
     curl https://DEINE-DOMAIN/api/ready           # Zustand jeder Komponente
-    curl https://DEINE-DOMAIN/manifest.webmanifest
 
 \`/ready\` nennt jede Komponente einzeln. \`realtime: false\` bedeutet: seit über
 zehn Minuten kein erfolgreicher Abruf — dann läuft der Worker nicht.
@@ -548,10 +656,25 @@ step('Bündel prüfen');
  * möglicherweise archiviert. Deshalb wird hier ausdrücklich nachgesehen, statt
  * darauf zu vertrauen, dass keine `.env` kopiert wurde.
  */
+if (withEnv) {
+  const source = resolve(root, withEnv);
+  if (!existsSync(source)) {
+    console.error(`✗ --with-env: ${source} existiert nicht.`);
+    process.exit(1);
+  }
+  cpSync(source, join(outDir, '.env'));
+  execFileSync('chmod', ['600', join(outDir, '.env')]);
+  console.log('  ⚠ Eine ausgefüllte .env liegt im Bündel (Rechte 600).');
+  console.log('    Dieses Bündel enthält damit Zugangsdaten und darf weder');
+  console.log('    weitergegeben noch in ein Repository gelegt werden.');
+}
+
 const strayEnvFiles = execFileSync('find', [outDir, '-name', '.env', '-o', '-name', '.env.*', '!', '-name', '.env.example'])
   .toString()
   .split('\n')
-  .filter(Boolean);
+  .filter(Boolean)
+  // Die bewusst mitgegebene .env ist kein Versehen — alles andere schon.
+  .filter((file) => !(withEnv && file === join(outDir, '.env')));
 
 if (strayEnvFiles.length > 0) {
   console.error('✗ Das Bündel enthält Konfigurationsdateien mit möglichen Zugangsdaten:');
@@ -559,7 +682,11 @@ if (strayEnvFiles.length > 0) {
   console.error('  Abbruch — sonst würden Secrets mit ausgeliefert.');
   process.exit(1);
 }
-console.log('  ✓ keine .env im Bündel (nur .env.example)');
+console.log(
+  withEnv
+    ? '  ✓ genau eine .env im Bündel — die ausdrücklich mitgegebene'
+    : '  ✓ keine .env im Bündel (nur .env.example)',
+);
 
 // Fehlt eines dieser Stücke, startet auf dem Server etwas nicht — besser hier
 // auffallen als dort.
@@ -578,6 +705,8 @@ const required = [
   'web/apps/web/public/manifest.webmanifest',
   'admin/apps/admin/server.js',
   'bin/migrate.sh',
+  'bin/selftest.sh',
+  'install.sh',
   '.env.example',
   'README.md',
 ];
