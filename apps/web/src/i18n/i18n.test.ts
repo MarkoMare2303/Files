@@ -51,4 +51,13 @@ describe('i18n', () => {
     const empty = Object.entries(de).filter(([, value]) => value.trim().length === 0);
     expect(empty).toEqual([]);
   });
+
+  it('nennt in Konfigurationshinweisen die Variablen der PWA, nicht die der Expo-App', () => {
+    // Zwei Meldungen verwiesen auf EXPO_PUBLIC_* — `auth.notConfigured` und
+    // `map.noStyle`. Diese Variablen bewirken in der PWA nichts: sie liest
+    // NEXT_PUBLIC_*. Wer die Meldung liest, füllt die falsche Zeile der .env
+    // und die Anmeldung bzw. die Karte bleibt trotzdem aus (§55).
+    const withExpoNames = Object.entries(de).filter(([, value]) => value.includes('EXPO_PUBLIC_'));
+    expect(withExpoNames).toEqual([]);
+  });
 });

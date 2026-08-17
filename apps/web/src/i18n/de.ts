@@ -155,7 +155,7 @@ export const de = {
   'map.layer.reports': 'Community-Meldungen',
   'map.layer.alerts': 'Offizielle Störungen',
   'map.noStyle':
-    'Kartenhintergrund nicht konfiguriert. Setze EXPO_PUBLIC_MAP_TILE_URL, um die Karte anzuzeigen.',
+    'Kartenhintergrund nicht konfiguriert. Setze NEXT_PUBLIC_MAP_TILE_URL, um die Karte anzuzeigen.',
 
   // Suche (§27)
   'search.title': 'Suche',
@@ -221,8 +221,10 @@ export const de = {
   'auth.continueAsGuest': 'Ohne Konto fortfahren',
   'auth.callbackFailed':
     'Die Anmeldung konnte nicht abgeschlossen werden. Der Link ist möglicherweise abgelaufen — fordere einen neuen an.',
+  // Nennt die Variablen der PWA, nicht die der eingefrorenen Expo-App — sonst
+  // sucht der Betreiber in der falschen Datei (§55).
   'auth.notConfigured':
-    'Anmeldung ist nicht konfiguriert. Es fehlen EXPO_PUBLIC_SUPABASE_URL und EXPO_PUBLIC_SUPABASE_ANON_KEY.',
+    'Anmeldung ist nicht konfiguriert. Es fehlen NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY.',
 
   // Fehler (§44)
   'error.generic': 'Da ist etwas schiefgelaufen. Bitte versuche es erneut.',
