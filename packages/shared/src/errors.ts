@@ -12,6 +12,7 @@ export const ErrorCode = {
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   VALIDATION_FAILED: 'VALIDATION_FAILED',
+  REPORT_CONTEXT_MISSING: 'REPORT_CONTEXT_MISSING',
   RATE_LIMITED: 'RATE_LIMITED',
   CONFLICT: 'CONFLICT',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
@@ -65,6 +66,16 @@ const MESSAGES: Record<ErrorCode, { status: number; message: string; userMessage
       fr: 'La saisie est incomplète ou invalide.',
       it: 'I dati inseriti sono incompleti o non validi.',
       en: 'The input is incomplete or invalid.',
+    },
+  },
+  REPORT_CONTEXT_MISSING: {
+    status: 422,
+    message: 'Report has no resolvable reference (trip, stop or route)',
+    userMessage: {
+      de: 'Wir konnten die Meldung keiner Fahrt und keiner Haltestelle zuordnen. Wähle zuerst deine Fahrt aus oder aktiviere den Standort.',
+      fr: 'Nous n’avons pu rattacher ce signalement ni à une course ni à un arrêt. Choisis d’abord ta course ou active la localisation.',
+      it: 'Non è stato possibile associare la segnalazione a una corsa o a una fermata. Scegli prima la tua corsa o attiva la posizione.',
+      en: 'We could not link this report to a trip or a stop. Pick your trip first, or turn on location.',
     },
   },
   RATE_LIMITED: {

@@ -59,4 +59,11 @@ export const it: Partial<Record<keyof typeof de, string>> = {
   'push.enable': 'Attiva le notifiche',
   'landing.cta': 'Apri l’app',
   'location.foregroundOnly': 'Il riconoscimento funziona solo finché questa pagina è aperta. In background un browser non può leggere la posizione.',
+  'report.group.CAPACITY': 'Occupazione',
+  'report.group.DISRUPTION': 'Guasto',
+  'report.group.VEHICLE': 'Veicolo',
+  'report.group.STATION': 'Fermata',
+  'report.group.SAFETY': 'Sicurezza',
+  'report.group.INFO': 'Informazione',
+  'report.group.OTHER': 'Altro',
 };

@@ -137,6 +137,16 @@ export const de = {
   'report.scope.NETWORK': 'Netzweit',
   'report.mine': 'Deine Meldung',
 
+  // Kategoriegruppen — die Werte aus der Datenbank sind Schlüssel, keine
+  // Anzeigetexte. Ohne diese Zuordnung stand „CAPACITY" in der Oberfläche.
+  'report.group.CAPACITY': 'Auslastung',
+  'report.group.DISRUPTION': 'Störung',
+  'report.group.VEHICLE': 'Fahrzeug',
+  'report.group.STATION': 'Haltestelle',
+  'report.group.SAFETY': 'Sicherheit',
+  'report.group.INFO': 'Information',
+  'report.group.OTHER': 'Sonstiges',
+
   // Karte (§13)
   'map.title': 'Karte',
   'map.myLocation': 'Mein Standort',

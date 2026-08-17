@@ -24,6 +24,20 @@ import { generateId, useSessionStore } from '../../../src/state/session.store';
  * Der gesamte Kontext (Fahrt, Linie, Halt) wird serverseitig aus der aktiven
  * Fahrt-Sitzung abgeleitet; die App schickt nur Kategorie und Position.
  */
+/**
+ * Übersetzt einen Kategoriegruppen-Schlüssel.
+ *
+ * Die Datenbank liefert Schlüssel wie `CAPACITY`. Ist eine Gruppe noch nicht
+ * übersetzt — Kategorien sind administrativ erweiterbar (§32) — wird der
+ * Schlüssel lesbar gemacht statt roh angezeigt.
+ */
+function groupLabel(group: string): string {
+  const key = `report.group.${group}` as 'report.group.OTHER';
+  const translated = t(key);
+  if (translated !== key) return translated;
+  return group.charAt(0) + group.slice(1).toLowerCase();
+}
+
 function vibrate(pattern: number | number[]): void {
   // Nicht jeder Browser kann das — vor allem iOS-Safari nicht. Ohne
   // Vibration bleibt die visuelle Rückmeldung, kein Fehler.
@@ -141,7 +155,7 @@ export default function ReportPage(): React.JSX.Element {
       {grouped.map(([group, items]) => (
         <section key={group} className="flex flex-col gap-sm">
           <Text variant="title3" as="h2" color="textSecondary">
-            {group}
+            {groupLabel(group)}
           </Text>
           <div className="grid grid-cols-2 gap-md">
             {items.map((category) => (

@@ -53,7 +53,11 @@ export function t(
   params?: Record<string, string | number>,
   locale: Locale = activeLocale,
 ): string {
-  const template = CATALOGS[locale]?.[key] ?? de[key];
+  // Der letzte Rückfall ist der Schlüssel selbst, nicht `undefined`.
+  // Kategorien und ihre Gruppen sind administrativ erweiterbar (§32); ein
+  // neuer Schlüssel darf die Oberfläche nicht mit „undefined" füllen oder
+  // beim Aufruf von `.replace()` abstürzen lassen.
+  const template = CATALOGS[locale]?.[key] ?? de[key] ?? key;
   if (!params) return template;
   return template.replace(/\{(\w+)\}/g, (match, name: string) =>
     name in params ? String(params[name]) : match,

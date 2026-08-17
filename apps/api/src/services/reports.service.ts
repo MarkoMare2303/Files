@@ -237,6 +237,21 @@ export class ReportsService {
       });
     }
 
+    // Erst NACH der Plausibilitätsprüfung: Liegt die Position ausserhalb der
+    // Schweiz oder ist sie offensichtlich falsch, ist das die nützlichere
+    // Auskunft. Ein „kein Bezug gefunden" wäre dort zwar auch richtig, würde
+    // aber die eigentliche Ursache verdecken.
+    if (scope === null) {
+      throw new AppError(ErrorCode.REPORT_CONTEXT_MISSING, {
+        details: {
+          categoryKey: category.key,
+          allowedScopes: category.allowed_scopes,
+          hasTrip: context.tripId !== null,
+          hasStop: context.stopId !== null,
+        },
+      });
+    }
+
     // --- Status und Lebensdauer ---------------------------------------------
     let status: ReportStatus = 'ACTIVE';
     if (profile.status === 'SHADOW_FLAGGED') {
@@ -426,6 +441,27 @@ export class ReportsService {
       }
     }
 
+    // 1b) Ohne Fahrt: nächstgelegene Station aus der Position bestimmen.
+    //
+    // Ohne diesen Schritt war „Kontrolle am Bahnhof" nicht meldbar — es gab
+    // schlicht keinen Bezug, und die Meldung wurde mit einem 422 abgelehnt.
+    // Der Radius ist bewusst eng: Wer 150 m von der Haltestelle entfernt ist,
+    // steht nicht mehr an ihr. Gesucht werden nur Stationen und Halte ohne
+    // Elternstation — auf einer einzelnen Bahnsteigkante meldet niemand.
+    if (!context.stopId && input.lat !== undefined && input.lon !== undefined) {
+      const nearby = await this.db.queryOne<{ stop_id: string }>(
+        `SELECT stop_id
+         FROM transit.stops
+         WHERE feed_id = transit.active_feed_id()
+           AND (location_type = 1 OR parent_station IS NULL)
+           AND ST_DWithin(geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3)
+         ORDER BY geom <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
+         LIMIT 1`,
+        [input.lat, input.lon, STATION_PROXIMITY_METERS],
+      );
+      context.stopId = nearby?.stop_id ?? null;
+    }
+
     // 2) Abstand zur Strecke für die Plausibilitätsprüfung.
     if (context.tripId && input.lat !== undefined && input.lon !== undefined) {
       const row = await this.db.queryOne<{ distance_m: number | null }>(
@@ -441,27 +477,60 @@ export class ReportsService {
     return context;
   }
 
+  /**
+   * Bestimmt den Bezug der Meldung.
+   *
+   * Jeder Scope braucht eine Referenz, die die Datenbank auch prüft
+   * (`reports_scope_reference`): VEHICLE_TRIP braucht eine Fahrt, STOP und
+   * STATION brauchen einen Halt, ROUTE_SEGMENT eines von beidem. Wird ein
+   * Scope gewählt, dessen Referenz fehlt, scheitert das INSERT — und der
+   * Nutzer sieht einen nichtssagenden Serverfehler.
+   *
+   * Genau das passierte, wenn jemand ohne aktive Fahrt und ausserhalb jeder
+   * Haltestelle meldete (ländlicher Raum, PostAuto ohne erkannte Fahrt). Diese
+   * Funktion gibt deshalb `null` zurück, wenn sich KEIN Scope belegen lässt;
+   * der Aufrufer wandelt das in eine verständliche Meldung.
+   */
   private resolveScope(
     requested: ReportScope | undefined,
     category: CategoryRow,
     context: ReportContext,
-  ): ReportScope {
+  ): ReportScope | null {
     const allowed = category.allowed_scopes;
     // NETWORK ist der Moderation vorbehalten (§16).
-    const candidate = requested && allowed.includes(requested) && requested !== 'NETWORK'
-      ? requested
-      : category.default_scope;
+    const candidate =
+      requested && allowed.includes(requested) && requested !== 'NETWORK'
+        ? requested
+        : category.default_scope;
 
-    // Fällt der Standard-Scope mangels Bezug aus, wird auf einen passenden
-    // erlaubten Scope zurückgefallen, statt die Meldung abzulehnen.
-    if (candidate === 'VEHICLE_TRIP' && !context.tripId) {
-      if (context.stopId && allowed.includes('STATION')) return 'STATION';
-      if (context.stopId && allowed.includes('STOP')) return 'STOP';
+    /** Ist dieser Scope mit dem vorhandenen Kontext überhaupt belegbar? */
+    const satisfiable = (scope: ReportScope): boolean => {
+      switch (scope) {
+        case 'VEHICLE_TRIP':
+          return context.tripId !== null;
+        case 'STOP':
+        case 'STATION':
+          return context.stopId !== null;
+        case 'ROUTE_SEGMENT':
+          return context.routeId !== null || context.stopId !== null;
+        case 'NETWORK':
+          // Der Moderation vorbehalten; hier nie als Rückfall zulässig.
+          return false;
+      }
+    };
+
+    const preferred = candidate === 'NETWORK' ? category.default_scope : candidate;
+    if (satisfiable(preferred)) return preferred;
+
+    // Auf einen anderen erlaubten Scope ausweichen, statt die Meldung
+    // abzulehnen — in dieser Reihenfolge, weil sie vom Konkreten zum
+    // Allgemeinen geht.
+    const fallbacks: ReportScope[] = ['VEHICLE_TRIP', 'STATION', 'STOP', 'ROUTE_SEGMENT'];
+    for (const scope of fallbacks) {
+      if (scope !== preferred && allowed.includes(scope) && satisfiable(scope)) return scope;
     }
-    if ((candidate === 'STOP' || candidate === 'STATION') && !context.stopId) {
-      if (context.tripId && allowed.includes('VEHICLE_TRIP')) return 'VEHICLE_TRIP';
-    }
-    return candidate === 'NETWORK' ? category.default_scope : candidate;
+
+    return null;
   }
 
   private async abuseCounters(userId: string): Promise<AbuseCounters> {
@@ -909,6 +978,13 @@ export class ReportsService {
 
 // --- Hilfsstrukturen ---------------------------------------------------------
 
+/**
+ * Wie nah man an einer Haltestelle sein muss, damit eine Meldung ihr
+ * zugeordnet wird. 150 m entsprechen etwa der Länge eines Bahnsteigs plus
+ * Vorplatz — weiter weg steht man nicht mehr „an der Haltestelle".
+ */
+const STATION_PROXIMITY_METERS = 150;
+
 interface ReportContext {
   tripId: string | null;
   serviceDate: string | null;
@@ -998,8 +1074,10 @@ const REPORT_SELECT = `
     p.alias AS author_alias,
     v.vote AS my_vote,
     (r.user_id = $1) AS is_mine,
-    stop.name AS stop_name,
-    nstop.name AS next_stop_name,
+    -- Der Schweizer Datensatz referenziert Kanten/Gleise („Lenzburg, Kante 1").
+    -- Angezeigt wird der Name der Station.
+    COALESCE(stop_parent.name, stop.name) AS stop_name,
+    COALESCE(nstop_parent.name, nstop.name) AS next_stop_name,
     rt.short_name AS route_short_name
   FROM public.reports r
   JOIN public.report_categories c ON c.id = r.category_id
@@ -1007,8 +1085,12 @@ const REPORT_SELECT = `
   LEFT JOIN public.report_votes v ON v.report_id = r.id AND v.user_id = $1
   LEFT JOIN transit.stops stop
     ON stop.feed_id = transit.active_feed_id() AND stop.stop_id = r.stop_id
+  LEFT JOIN transit.stops stop_parent
+    ON stop_parent.feed_id = transit.active_feed_id() AND stop_parent.stop_id = stop.parent_station
   LEFT JOIN transit.stops nstop
     ON nstop.feed_id = transit.active_feed_id() AND nstop.stop_id = r.next_stop_id
+  LEFT JOIN transit.stops nstop_parent
+    ON nstop_parent.feed_id = transit.active_feed_id() AND nstop_parent.stop_id = nstop.parent_station
   LEFT JOIN transit.routes rt
     ON rt.feed_id = transit.active_feed_id() AND rt.route_id = r.route_id
 `;

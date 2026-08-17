@@ -22,7 +22,31 @@ describe('apiEnvSchema', () => {
     const env = parseEnv(apiEnvSchema, BASE as NodeJS.ProcessEnv);
     expect(env.NODE_ENV).toBe('development');
     expect(env.API_PORT).toBe(3001);
-    expect(env.API_CORS_ORIGINS).toEqual([]);
+    // Ohne Angabe sind ausserhalb der Produktion die lokalen Ports erlaubt —
+    // sonst blockiert der Browser jede Anfrage der PWA, und zwar unsichtbar.
+    expect(env.API_CORS_ORIGINS).toContain('http://localhost:3002');
+    expect(env.API_CORS_ORIGINS).toContain('http://localhost:3000');
+  });
+
+  it('übernimmt gesetzte CORS-Origins unverändert', () => {
+    const env = parseEnv(apiEnvSchema, {
+      ...BASE,
+      API_CORS_ORIGINS: 'https://app.example.ch',
+    } as NodeJS.ProcessEnv);
+    expect(env.API_CORS_ORIGINS).toEqual(['https://app.example.ch']);
+  });
+
+  it('setzt in Produktion KEINE lokalen Origins ein', () => {
+    // In Produktion muss die Liste bewusst gesetzt werden; die Voreinstellung
+    // darf dort nicht greifen.
+    expect(() =>
+      parseEnv(apiEnvSchema, {
+        ...BASE,
+        NODE_ENV: 'production',
+        API_INTERNAL_SECRET: 'ein-echtes-langes-produktionssecret',
+        SUPABASE_JWT_SECRET: 'produktions-jwt-secret',
+      } as NodeJS.ProcessEnv),
+    ).toThrow(/API_CORS_ORIGINS/);
   });
 
   it('lehnt eine ungültige Datenbank-URL ab', () => {

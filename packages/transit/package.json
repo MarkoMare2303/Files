@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "verify:production": "tsx src/scripts/verify-production.ts"
+    "verify:production": "tsx src/scripts/verify-production.ts",
+    "verify:realtime": "tsx src/scripts/verify-realtime-pipeline.ts"
   },
   "dependencies": {
     "@swissov/config": "workspace:*",

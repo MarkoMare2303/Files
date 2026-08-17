@@ -32,7 +32,8 @@
     "web:dev": "pnpm --filter @swissov/web run dev",
     "push:keys": "pnpm --filter @swissov/worker run push:keys",
     "test:e2e": "pnpm --filter @swissov/web run test:e2e",
-    "gtfs:verify-production": "pnpm --filter @swissov/transit run verify:production"
+    "gtfs:verify-production": "pnpm --filter @swissov/transit run verify:production",
+    "gtfs:verify-realtime": "pnpm --filter @swissov/transit run verify:realtime"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

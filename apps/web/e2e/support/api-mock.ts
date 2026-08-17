@@ -8,8 +8,10 @@ import type { Page, Route } from '@playwright/test';
  * Quellenkennzeichnung. Die API hat ihre eigenen Integrationstests gegen eine
  * echte PostGIS-Datenbank (`apps/api/src/api.integration.test.ts`).
  *
- * Die Antworten hier entsprechen exakt den Zod-Schemata aus `@swissov/types` —
- * weicht die API davon ab, fällt das dort auf, nicht hier.
+ * Die Antworten hier entsprechen exakt den Zod-Schemata aus `@swissov/types`,
+ * und die Kategorieschlüssel entsprechen den Seeds aus `packages/database`
+ * (`ticket_inspection`, nicht `TICKET_INSPECTION`) — eine Attrappe, die
+ * anders aussieht als der echte Server, prüft nichts.
  */
 const API = 'http://127.0.0.1:3001';
 
@@ -19,9 +21,9 @@ const nowIso = (offsetMinutes = 0): string =>
 export const APP_CONFIG = {
   categories: [
     {
-      key: 'TICKET_INSPECTION',
+      key: 'ticket_inspection',
       label: { de: 'Kontrolle', fr: 'Contrôle', it: 'Controllo', en: 'Inspection' },
-      group: 'Fahrgastinformation',
+      group: 'INFO',
       icon: 'shield',
       color: '#1E6BAA',
       defaultScope: 'VEHICLE_TRIP',
@@ -32,9 +34,9 @@ export const APP_CONFIG = {
       enabled: true,
     },
     {
-      key: 'DELAY',
+      key: 'delay_mismatch',
       label: { de: 'Verspätung', fr: 'Retard', it: 'Ritardo', en: 'Delay' },
-      group: 'Betrieb',
+      group: 'DISRUPTION',
       icon: 'clock',
       color: '#E0A32E',
       defaultScope: 'VEHICLE_TRIP',
@@ -45,9 +47,9 @@ export const APP_CONFIG = {
       enabled: true,
     },
     {
-      key: 'CROWDING',
+      key: 'very_high_occupancy',
       label: { de: 'Sehr voll', fr: 'Très plein', it: 'Molto pieno', en: 'Crowded' },
-      group: 'Komfort',
+      group: 'CAPACITY',
       icon: 'users',
       color: '#F2701A',
       defaultScope: 'VEHICLE_TRIP',
@@ -73,7 +75,7 @@ export const APP_CONFIG = {
 export const COMMUNITY_REPORT = {
   id: '11111111-1111-4111-8111-111111111111',
   source: 'COMMUNITY',
-  categoryKey: 'TICKET_INSPECTION',
+  categoryKey: 'ticket_inspection',
   categoryLabel: { de: 'Kontrolle', fr: 'Contrôle', it: 'Controllo', en: 'Inspection' },
   categoryIcon: 'shield',
   categoryColor: '#1E6BAA',

@@ -93,12 +93,26 @@ pnpm gtfs:import
 ```
 
 **Wichtiger Hinweis zur bisherigen Prüfung:** Die Entwicklungsumgebung dieses Projekts
-erreicht `opentransportdata.swiss` nicht — der ausgehende Proxy beantwortet Anfragen mit
-HTTP 403. Sicherheits- oder Netzwerkrichtlinien zu umgehen kam nicht in Frage. Der
-Importer wurde stattdessen Ende-zu-Ende gegen einen lokal erzeugten, formatkorrekten
-GTFS-Datensatz verifiziert. **Der Import des echten Schweizer Datensatzes ist damit noch
-nicht bewiesen** und muss vor dem Livegang einmal durchgeführt werden — dafür existiert
-`pnpm gtfs:verify-production`.
+erreicht **keinen** externen Host — der Egress-Proxy beantwortet jede CONNECT-Anfrage mit
+HTTP 403, auch für `www.google.com`. Das ist eine Richtlinie der Umgebung, kein Fehler in
+der Anfrage; sie zu umgehen kam nicht in Frage.
+
+Verifiziert wurde deshalb alles, was ohne Netzzugang prüfbar ist — und zwar vollständig
+gegen eine echte PostGIS-Datenbank:
+
+| Geprüft | Wie |
+| --- | --- |
+| GTFS-Import Ende zu Ende | `pnpm gtfs:import --file …` mit 11 Linien, 436 Fahrten, 1830 Halten |
+| Haltestellensuche, Abfahrten, Fahrtdetail | Live gegen die laufende API |
+| Fahrtenerkennung | `AUTO_SELECT` mit 0.933 für die tatsächlich verkehrende Fahrt |
+| Meldung anlegen, lesen, bestätigen, melden | Live mit zwei Konten |
+| GTFS-RT und Service Alerts | `pnpm gtfs:verify-realtime` — echter Protobuf über HTTP in die Datenbank |
+| Die PWA gegen echte Daten | Chromium: Abfahrtstafel, Suche, Fahrtseite, Kategorien |
+
+**Nicht bewiesen ist allein die Erreichbarkeit von `opentransportdata.swiss`** und die
+Form der dortigen echten Feeds. Dafür: `pnpm gtfs:verify-production`, dann
+`pnpm gtfs:import`. Ist der Server ebenfalls hinter einem Proxy, hilft
+`pnpm gtfs:import --file <heruntergeladene.zip>`.
 
 ### 3.2 Supabase — Anmeldung und Realtime
 

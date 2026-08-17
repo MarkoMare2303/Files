@@ -115,9 +115,9 @@ test.describe('5 — Melden', () => {
     await mockApi(page);
     await page.goto('/report');
 
-    await expect(page.getByTestId('category-TICKET_INSPECTION')).toBeVisible();
-    await expect(page.getByTestId('category-DELAY')).toBeVisible();
-    await expect(page.getByTestId('category-CROWDING')).toBeVisible();
+    await expect(page.getByTestId('category-ticket_inspection')).toBeVisible();
+    await expect(page.getByTestId('category-delay_mismatch')).toBeVisible();
+    await expect(page.getByTestId('category-very_high_occupancy')).toBeVisible();
   });
 
   test('weist im Gastmodus auf das nötige Konto hin', async ({ page }) => {
@@ -362,7 +362,7 @@ test.describe('11 — Darstellung und Bedienbarkeit', () => {
     await mockApi(page);
     await page.goto('/report');
 
-    const button = page.getByTestId('category-DELAY');
+    const button = page.getByTestId('category-delay_mismatch');
     const box = await button.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);

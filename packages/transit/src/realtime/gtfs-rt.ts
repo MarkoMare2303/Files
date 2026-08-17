@@ -1,6 +1,6 @@
 import type { Database } from '@swissov/database';
 import GtfsRealtimeBindings from 'gtfs-realtime-bindings';
-import { httpRequest } from '../http.js';
+import { authorizedRequest } from '../auth.js';
 
 /**
  * GTFS-Realtime-Integration (§6).
@@ -28,6 +28,8 @@ export interface FetchFeedOptions {
   apiKey: string | undefined;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Erzwingt ein Authentifizierungsverfahren; sonst wird durchprobiert. */
+  authScheme?: string | undefined;
 }
 
 /** Lädt und dekodiert eine GTFS-RT-FeedMessage. */
@@ -36,16 +38,20 @@ export async function fetchFeedMessage(
 ): Promise<GtfsRealtimeBindings.transit_realtime.FeedMessage> {
   if (!options.apiKey) throw new MissingCredentialsError('OPENTRANSPORTDATA_API_KEY');
 
-  const response = await httpRequest(options.url, {
-    headers: {
-      authorization: `Bearer ${options.apiKey}`,
-      accept: 'application/octet-stream, application/x-protobuf',
-      'user-agent': 'swissov-live/0.1',
+  const { response } = await authorizedRequest(
+    options.url,
+    options.apiKey,
+    {
+      headers: {
+        accept: 'application/octet-stream, application/x-protobuf',
+        'user-agent': 'swissov-live/0.1',
+      },
+      timeoutMs: options.timeoutMs ?? 45_000,
+      retries: 2,
+      ...(options.signal ? { signal: options.signal } : {}),
     },
-    timeoutMs: options.timeoutMs ?? 45_000,
-    retries: 2,
-    ...(options.signal ? { signal: options.signal } : {}),
-  });
+    options.authScheme,
+  );
 
   const buffer = new Uint8Array(await response.arrayBuffer());
   if (buffer.byteLength === 0) throw new Error('Leere GTFS-RT-Antwort');
@@ -266,6 +272,18 @@ export function translationsToJson(value: TranslatedString | null | undefined): 
   return result;
 }
 
+/**
+ * Leerstring → null.
+ *
+ * Notwendig für alles, was aus Protocol Buffers kommt: dort ist der
+ * Standardwert einer nicht gesetzten Zeichenkette `''` und nicht `undefined`.
+ */
+function blankToNull(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function syncServiceAlerts(
   db: Database,
   feed: GtfsRealtimeBindings.transit_realtime.FeedMessage,
@@ -321,27 +339,29 @@ export async function syncServiceAlerts(
 
     await db.query('DELETE FROM transit.service_alert_entities WHERE alert_id = $1', [row.id]);
     for (const informed of alert.informedEntity ?? []) {
-      if (
-        !informed.agencyId &&
-        !informed.routeId &&
-        informed.routeType === null &&
-        informed.routeType === undefined &&
-        !informed.trip?.tripId &&
-        !informed.stopId
-      ) {
-        continue;
-      }
+      // Protocol Buffers kennen keine „nicht gesetzten" Zeichenketten: nicht
+      // belegte Felder kommen als LEERSTRING an, nicht als undefined. Ein
+      // `?? null` greift dabei nicht — es würde '' schreiben.
+      //
+      // Genau das passierte: eine InformedEntity mit nur `routeId` erzeugte
+      // Zeilen mit stop_id = '' und agency_id = ''. Die Abfrage der API filtert
+      // auf `IS NOT NULL`, liess die Leerstrings also durch, und die
+      // Antwortvalidierung (`gtfsIdSchema`, min. 1 Zeichen) schlug fehl —
+      // `GET /v1/alerts` antwortete mit 500, für JEDE echte Störungsmeldung.
+      const agencyId = blankToNull(informed.agencyId);
+      const routeId = blankToNull(informed.routeId);
+      const tripId = blankToNull(informed.trip?.tripId);
+      const stopId = blankToNull(informed.stopId);
+      const routeType =
+        informed.routeType === null || informed.routeType === undefined ? null : informed.routeType;
+
+      // Eine InformedEntity ohne jeden Bezug beschreibt nichts.
+      if (!agencyId && !routeId && !tripId && !stopId && routeType === null) continue;
+
       await db.query(
         `INSERT INTO transit.service_alert_entities (alert_id, agency_id, route_id, route_type, trip_id, stop_id)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          row.id,
-          informed.agencyId ?? null,
-          informed.routeId ?? null,
-          informed.routeType ?? null,
-          informed.trip?.tripId ?? null,
-          informed.stopId ?? null,
-        ],
+        [row.id, agencyId, routeId, routeType, tripId, stopId],
       );
       entities += 1;
     }

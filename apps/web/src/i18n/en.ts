@@ -63,4 +63,11 @@ export const en: Partial<Record<keyof typeof de, string>> = {
   'push.enable': 'Enable notifications',
   'landing.cta': 'Open the app',
   'location.foregroundOnly': 'Detection only runs while this page is open. A browser cannot read your location in the background.',
+  'report.group.CAPACITY': 'Occupancy',
+  'report.group.DISRUPTION': 'Disruption',
+  'report.group.VEHICLE': 'Vehicle',
+  'report.group.STATION': 'Stop',
+  'report.group.SAFETY': 'Safety',
+  'report.group.INFO': 'Information',
+  'report.group.OTHER': 'Other',
 };

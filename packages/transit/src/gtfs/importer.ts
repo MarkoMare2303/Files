@@ -1,7 +1,7 @@
 import type { Database } from '@swissov/database';
 import { normalizeGtfsDate, parseGtfsTime } from '@swissov/shared';
 import type pg from 'pg';
-import { forEachEntry, downloadArchive } from './archive.js';
+import { forEachEntry, downloadArchive, useLocalArchive } from './archive.js';
 import { copyRows, pointEwkt, type CopyValue } from './copy.js';
 import { gtfsBoolean, gtfsFloat, gtfsInt, readCsv } from './csv.js';
 
@@ -34,8 +34,18 @@ export const GTFS_FILES = [
 ] as const;
 
 export interface ImportOptions {
+  /** Download-URL. Wird ignoriert, wenn `file` gesetzt ist. */
   url: string;
+  /**
+   * Pfad zu einer bereits heruntergeladenen GTFS-ZIP-Datei.
+   *
+   * Gedacht für Netze, in denen der Server opentransportdata.swiss nicht
+   * erreicht (Firmenproxy, Air-Gap): Datei einmal manuell herunterladen,
+   * hierher zeigen, fertig. Der restliche Import ist identisch.
+   */
+  file?: string | undefined;
   apiKey?: string | undefined;
+  authScheme?: string | undefined;
   log?: (message: string) => void;
   /** Import auch dann durchführen, wenn die Prüfsumme unverändert ist. */
   force?: boolean;
@@ -64,10 +74,17 @@ export async function importGtfsStatic(
   const log = options.log ?? (() => undefined);
   const startedAt = Date.now();
 
-  log(`GTFS-Import gestartet: ${options.url}`);
-  const download = await downloadArchive(options.url, { apiKey: options.apiKey });
+  const source = options.file ?? options.url;
+  log(`GTFS-Import gestartet: ${source}`);
+  const download = options.file
+    ? await useLocalArchive(options.file)
+    : await downloadArchive(options.url, {
+        apiKey: options.apiKey,
+        authScheme: options.authScheme,
+      });
   log(
-    `Archiv geladen: ${(download.sizeBytes / 1024 / 1024).toFixed(1)} MB, ` +
+    `Archiv ${options.file ? 'gelesen' : 'geladen'}: ` +
+      `${(download.sizeBytes / 1024 / 1024).toFixed(1)} MB, ` +
       `sha256=${download.checksum.slice(0, 12)}…`,
   );
 
@@ -93,7 +110,7 @@ export async function importGtfsStatic(
     const created = await db.queryOne<{ id: string }>(
       `INSERT INTO transit.gtfs_imports (source_url, checksum, status)
        VALUES ($1, $2, 'IMPORTING') RETURNING id`,
-      [options.url, download.checksum],
+      [source, download.checksum],
     );
     if (!created) throw new Error('Feed-Version konnte nicht angelegt werden');
     const feedId = created.id;

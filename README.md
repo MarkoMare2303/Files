@@ -349,6 +349,7 @@ scripts/         Hilfsskripte
 |----------|--------|
 | [docs/architecture.md](docs/architecture.md) | Systemaufbau und Entwurfsentscheidungen |
 | [docs/transit-data.md](docs/transit-data.md) | GTFS, GTFS-RT, Service Alerts, OJP |
+| [docs/gtfs-import.md](docs/gtfs-import.md) | Echte Fahrplandaten anbinden und importieren |
 | [docs/trip-detection.md](docs/trip-detection.md) | Fahrtenerkennung im Detail |
 | [docs/database.md](docs/database.md) | Schema, Indizes, RLS |
 | [docs/security.md](docs/security.md) | Sicherheitsmassnahmen |

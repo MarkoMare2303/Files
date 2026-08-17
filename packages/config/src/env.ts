@@ -66,6 +66,14 @@ export const supabaseEnvSchema = z.object({
 
 export const transitEnvSchema = z.object({
   OPENTRANSPORTDATA_API_KEY: optionalNonEmpty,
+  /**
+   * Authentifizierungsverfahren gegenüber opentransportdata.swiss.
+   *
+   * Leer lassen: die Verfahren werden bei 401/403 automatisch durchprobiert
+   * (`bearer` → `raw` → `header`). Wer das richtige kennt, setzt es hier und
+   * spart die Fallback-Anfragen.
+   */
+  OPENTRANSPORTDATA_AUTH_SCHEME: z.enum(['bearer', 'raw', 'header']).optional(),
   GTFS_STATIC_URL: z
     .string()
     .default('https://opentransportdata.swiss/dataset/timetable-2025-gtfs2020/permalink'),
@@ -108,6 +116,19 @@ export const apiEnvSchema = baseEnvSchema
   .extend({
     API_PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
     API_HOST: z.string().default('0.0.0.0'),
+    /**
+     * Erlaubte Browser-Origins.
+     *
+     * Seit die App eine PWA ist, ist der Browser ein CORS-Client — die native
+     * App war es nie. Bleibt die Liste leer, fehlt in der Antwort der Header
+     * `access-control-allow-origin`, und der Browser verwirft JEDE API-Antwort.
+     * Der Fehler ist von aussen nicht zu sehen: die API antwortet mit 200, die
+     * App bleibt trotzdem leer.
+     *
+     * Ausserhalb der Produktion sind deshalb die lokalen Ports voreingestellt
+     * (Web 3002, Admin 3000, E2E 3102). In Produktion bleibt die Liste leer und
+     * `superRefine` unten erzwingt eine bewusste Angabe.
+     */
     API_CORS_ORIGINS: commaSeparated,
     API_INTERNAL_SECRET: z.string().min(16, 'API_INTERNAL_SECRET muss mindestens 16 Zeichen haben'),
     API_PUBLIC_URL: z.string().default('http://localhost:3001'),
@@ -115,6 +136,23 @@ export const apiEnvSchema = baseEnvSchema
     RATE_LIMIT_REPORTS_PER_HOUR: z.coerce.number().int().min(1).max(10_000).default(20),
     RATE_LIMIT_VOTES_PER_HOUR: z.coerce.number().int().min(1).max(50_000).default(120),
     SENTRY_DSN: optionalNonEmpty,
+  })
+  .transform((env) => {
+    // Lokale Voreinstellung — niemals in Produktion.
+    if (env.NODE_ENV !== 'production' && env.API_CORS_ORIGINS.length === 0) {
+      return {
+        ...env,
+        API_CORS_ORIGINS: [
+          'http://localhost:3002',
+          'http://127.0.0.1:3002',
+          'http://localhost:3000',
+          'http://127.0.0.1:3000',
+          'http://localhost:3102',
+          'http://127.0.0.1:3102',
+        ],
+      };
+    }
+    return env;
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {

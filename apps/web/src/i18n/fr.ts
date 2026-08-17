@@ -59,4 +59,11 @@ export const fr: Partial<Record<keyof typeof de, string>> = {
   'push.enable': 'Activer les notifications',
   'landing.cta': 'Ouvrir l’application',
   'location.foregroundOnly': 'La détection ne fonctionne que tant que cette page est ouverte. Un navigateur ne peut pas accéder à la position en arrière-plan.',
+  'report.group.CAPACITY': 'Occupation',
+  'report.group.DISRUPTION': 'Perturbation',
+  'report.group.VEHICLE': 'Véhicule',
+  'report.group.STATION': 'Arrêt',
+  'report.group.SAFETY': 'Sécurité',
+  'report.group.INFO': 'Information',
+  'report.group.OTHER': 'Autre',
 };

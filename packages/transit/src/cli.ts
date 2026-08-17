@@ -9,8 +9,13 @@ import { importGtfsStatic } from './gtfs/importer.js';
  *
  *   pnpm gtfs:import                          Standardquelle aus GTFS_STATIC_URL
  *   pnpm gtfs:import --url <URL>              abweichende Quelle
+ *   pnpm gtfs:import --file ./gtfs.zip        bereits heruntergeladene Datei
  *   pnpm gtfs:import --force                  auch bei unveränderter Prüfsumme
  *   pnpm gtfs:import --rows 50000             nur die ersten N Zeilen je Datei
+ *
+ * `--file` ist der Ausweg für Netze, die opentransportdata.swiss nicht
+ * erreichen: Archiv einmal per Browser herunterladen, hierher zeigen. Der
+ * Import selbst ist identisch.
  */
 
 const envSchema = transitEnvSchema.extend({ DATABASE_URL: z.string().url() });
@@ -26,6 +31,7 @@ async function main(): Promise<void> {
   const env = parseEnv(envSchema);
 
   const url = argValue('--url') ?? env.GTFS_STATIC_URL;
+  const file = argValue('--file');
   const force = process.argv.includes('--force');
   const rowsArg = argValue('--rows');
   const rowLimit = rowsArg ? Number.parseInt(rowsArg, 10) : undefined;
@@ -41,7 +47,9 @@ async function main(): Promise<void> {
   try {
     const result = await importGtfsStatic(db, {
       url,
+      ...(file ? { file } : {}),
       apiKey: env.OPENTRANSPORTDATA_API_KEY,
+      authScheme: env.OPENTRANSPORTDATA_AUTH_SCHEME,
       force,
       log: (message) => console.log(message),
       ...(rowLimit && Number.isFinite(rowLimit) ? { rowLimit } : {}),

@@ -172,12 +172,18 @@ export class TransitService {
     if (!header) return null;
 
     const { rows: stopRows } = await this.db.query<TripStopRow>(
-      `SELECT st.stop_sequence, st.stop_id, s.name AS stop_name, s.platform_code,
+      // Der Schweizer Datensatz referenziert in `stop_times` die Kante bzw. das
+      // Gleis („Zürich HB, Gleis 31"), nicht die Station. Für die Halteliste
+      // ist der Stationsname richtig; die Gleisangabe steht im eigenen Feld.
+      `SELECT st.stop_sequence, st.stop_id,
+              COALESCE(p.name, s.name) AS stop_name,
+              COALESCE(s.platform_code, p.platform_code) AS platform_code,
               ST_Y(s.geom::geometry) AS lat, ST_X(s.geom::geometry) AS lon,
               transit.service_time($3::date, st.arrival_seconds) AS scheduled_arrival,
               transit.service_time($3::date, st.departure_seconds) AS scheduled_departure
        FROM transit.stop_times st
        JOIN transit.stops s ON s.feed_id = st.feed_id AND s.stop_id = st.stop_id
+       LEFT JOIN transit.stops p ON p.feed_id = st.feed_id AND p.stop_id = s.parent_station
        WHERE st.feed_id = $1 AND st.trip_id = $2
        ORDER BY st.stop_sequence`,
       [feedId, tripId, serviceDate],
@@ -416,10 +422,14 @@ export class TransitService {
     const { rows } = await this.db.query<AlertRow>(
       `SELECT a.id, a.alert_id, a.cause, a.effect, a.severity, a.header, a.description, a.url,
               a.active_from, a.active_until, a.updated_at,
-              COALESCE(array_agg(DISTINCT e.route_id) FILTER (WHERE e.route_id IS NOT NULL), '{}') AS route_ids,
-              COALESCE(array_agg(DISTINCT e.stop_id) FILTER (WHERE e.stop_id IS NOT NULL), '{}') AS stop_ids,
-              COALESCE(array_agg(DISTINCT e.trip_id) FILTER (WHERE e.trip_id IS NOT NULL), '{}') AS trip_ids,
-              COALESCE(array_agg(DISTINCT e.agency_id) FILTER (WHERE e.agency_id IS NOT NULL), '{}') AS agency_ids
+              -- Zusaetzlich zu IS NOT NULL auch Leerstrings ausschliessen:
+              -- Protocol Buffers liefern fuer nicht gesetzte Felder '' statt
+              -- NULL. Solche Werte verletzen das Antwortschema und legten
+              -- damit die gesamte Stoerungsliste lahm.
+              COALESCE(array_agg(DISTINCT e.route_id) FILTER (WHERE e.route_id IS NOT NULL AND e.route_id <> ''), '{}') AS route_ids,
+              COALESCE(array_agg(DISTINCT e.stop_id) FILTER (WHERE e.stop_id IS NOT NULL AND e.stop_id <> ''), '{}') AS stop_ids,
+              COALESCE(array_agg(DISTINCT e.trip_id) FILTER (WHERE e.trip_id IS NOT NULL AND e.trip_id <> ''), '{}') AS trip_ids,
+              COALESCE(array_agg(DISTINCT e.agency_id) FILTER (WHERE e.agency_id IS NOT NULL AND e.agency_id <> ''), '{}') AS agency_ids
        FROM transit.service_alerts a
        LEFT JOIN transit.service_alert_entities e ON e.alert_id = a.id
        WHERE a.removed_at IS NULL

@@ -52,6 +52,14 @@ export async function createHarness(options: { now?: Date } = {}): Promise<TestH
     // Redis bewusst nicht verwenden: Tests sollen ohne externe Dienste laufen.
     REDIS_URL: '',
     API_CORS_ORIGINS: 'http://localhost:3000',
+    // Externe Integrationen ausdrücklich abschalten. Ohne diese Zeilen hängt
+    // das Testergebnis davon ab, was in der lokalen `.env` steht — ein Test,
+    // der bei einem Entwickler grün und beim nächsten rot ist, prüft nichts.
+    // Wer den aktivierten Zustand testen will, setzt die Werte im Test selbst.
+    WEB_PUSH_VAPID_PUBLIC_KEY: '',
+    WEB_PUSH_VAPID_PRIVATE_KEY: '',
+    OPENTRANSPORTDATA_API_KEY: '',
+    OJP_API_KEY: '',
   });
 
   const db = createDatabase({

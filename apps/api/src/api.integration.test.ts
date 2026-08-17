@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { TEST_STOPS, secondsSinceMidnight } from './test/fixtures.js';
 import { createHarness, type TestHarness, type TestUser } from './test/harness.js';
 
@@ -1032,6 +1033,156 @@ describe('API-Integration', () => {
   });
 
   // --- Verbindungssuche ------------------------------------------------------
+
+  describe('Meldungsbezug ohne aktive Fahrt', () => {
+    // Eigene Konten: die Meldungen weiter oben lösen für `user` einen
+    // Cooldown aus, und ein Test soll nicht von der Reihenfolge abhängen.
+    let stationUser: TestUser;
+    let nowhereUser: TestUser;
+
+    beforeAll(async () => {
+      stationUser = await harness.createUser();
+      nowhereUser = await harness.createUser();
+    });
+
+    it('ordnet eine Meldung an der Haltestelle der Station zu', async () => {
+      // Meldungen an einem Bahnhof ohne laufende Fahrt sind ein Kernfall
+      // („Kontrolle am Perron"). Ohne Auflösung aus der Position gab es dafür
+      // keinen Bezug — die Meldung wurde abgelehnt.
+      const response = await harness.server.inject({
+        method: 'POST',
+        url: '/v1/reports',
+        headers: stationUser.authHeader,
+        payload: {
+          categoryKey: 'ticket_inspection',
+          lat: TEST_STOPS.zurichHb.lat,
+          lon: TEST_STOPS.zurichHb.lon,
+          accuracy: 15,
+          clientReportId: randomUUID(),
+          observedAt: new Date().toISOString(),
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const report = response.json().report;
+      expect(report.scope).toBe('STATION');
+      expect(report.stopName).toBe('Zürich HB');
+    });
+
+    it('lehnt eine Meldung ohne jeden Bezug verständlich ab — nicht mit 500', async () => {
+      // Ohne Fahrt und ohne Haltestelle in der Nähe lässt sich kein Scope
+      // belegen. Früher verletzte die Meldung dabei eine CHECK-Bedingung der
+      // Datenbank und der Nutzer sah einen Serverfehler.
+      const response = await harness.server.inject({
+        method: 'POST',
+        url: '/v1/reports',
+        headers: nowhereUser.authHeader,
+        payload: {
+          categoryKey: 'ticket_inspection',
+          // Mitten im Wallis, weit weg von jeder Fixture-Haltestelle,
+          // aber innerhalb der Schweiz.
+          lat: 46.42,
+          lon: 7.02,
+          accuracy: 15,
+          clientReportId: randomUUID(),
+          observedAt: new Date().toISOString(),
+        },
+      });
+
+      expect(response.statusCode).toBe(422);
+      expect(response.json().error.code).toBe('REPORT_CONTEXT_MISSING');
+      expect(response.json().error.userMessage.de).toMatch(/Fahrt|Standort/);
+    });
+  });
+
+  describe('Echte Datenstrukturen des Schweizer Feeds', () => {
+    it('zeigt den Stations- statt den Kantennamen', async () => {
+      // Im Schweizer Datensatz zeigt `stop_times.stop_id` auf die Kante
+      // („Zürich HB, Gleis 31"), nicht auf die Station. Eine Abfahrtstafel,
+      // die den Kantennamen ausgibt, wiederholt in jeder Zeile den Bahnhof.
+      const quayId = `${TEST_STOPS.zurichHb.id}:0:31`;
+      await harness.db.query(
+        `INSERT INTO transit.stops
+           (feed_id, stop_id, name, geom, geom_lv95, location_type, parent_station, platform_code, wheelchair_boarding)
+         VALUES ($1, $2, $3,
+                 ST_SetSRID(ST_MakePoint($5, $4), 4326)::geography,
+                 ST_Transform(ST_SetSRID(ST_MakePoint($5, $4), 4326), 2056),
+                 0, $6, '31', 1)
+         ON CONFLICT DO NOTHING`,
+        [
+          harness.feed.feedId,
+          quayId,
+          'Zürich HB, Gleis 31',
+          TEST_STOPS.zurichHb.lat,
+          TEST_STOPS.zurichHb.lon,
+          TEST_STOPS.zurichHb.id,
+        ],
+      );
+
+      const { rows } = await harness.db.query<{ stop_name: string; platform_code: string | null }>(
+        `SELECT stop_name, platform_code FROM transit.departures($1::text[], now(), 720, 5)`,
+        [`{${quayId}}`],
+      );
+
+      if (rows.length > 0) {
+        expect(rows[0]?.stop_name).toBe('Zürich HB');
+        expect(rows[0]?.stop_name).not.toContain('Gleis');
+        expect(rows[0]?.platform_code).toBe('31');
+      }
+    });
+
+    it('liefert keine Abfahrt am Endhalt einer Fahrt', async () => {
+      // Am letzten Halt steigt niemand mehr ein. Saubere Feeds setzen dafür
+      // `pickup_type = 1`, aber darauf ist kein Verlass.
+      const { rows } = await harness.db.query<{ trip_id: string; stop_sequence: number }>(
+        `SELECT d.trip_id, d.stop_sequence
+         FROM transit.departures($1::text[], now(), 1440, 50) d`,
+        [`{${TEST_STOPS.baselSbb.id}}`],
+      );
+
+      for (const row of rows) {
+        const last = await harness.db.queryOne<{ max: number }>(
+          `SELECT max(stop_sequence) AS max FROM transit.stop_times
+           WHERE feed_id = $1 AND trip_id = $2`,
+          [harness.feed.feedId, row.trip_id],
+        );
+        expect(row.stop_sequence).toBeLessThan(last!.max);
+      }
+    });
+
+    it('verträgt Leerstrings in Störungsbezügen aus Protocol Buffers', async () => {
+      // Protocol Buffers liefern für nicht gesetzte Zeichenketten '' statt
+      // NULL. Landeten diese Werte in der Antwort, verletzten sie das Schema
+      // und `GET /v1/alerts` antwortete mit 500 — für JEDE echte Meldung.
+      await harness.db.query(
+        `DELETE FROM transit.service_alerts WHERE alert_id = 'leerstring-test'`,
+      );
+      const alert = await harness.db.queryOne<{ id: string }>(
+        `INSERT INTO transit.service_alerts
+           (alert_id, severity, header, description, active_from, active_until)
+         VALUES ('leerstring-test', 'WARNING',
+                 '{"de":"Testmeldung"}'::jsonb, '{"de":"Beschreibung"}'::jsonb,
+                 now() - interval '10 minutes', now() + interval '1 hour')
+         RETURNING id`,
+      );
+      await harness.db.query(
+        `INSERT INTO transit.service_alert_entities (alert_id, agency_id, route_id, trip_id, stop_id)
+         VALUES ($1, '', $2, '', '')`,
+        [alert!.id, 'ic3'],
+      );
+
+      const response = await harness.server.inject({ method: 'GET', url: '/v1/alerts' });
+      expect(response.statusCode).toBe(200);
+
+      const found = response.json().alerts.find((a: { id: string }) => a.id === 'leerstring-test');
+      expect(found).toBeDefined();
+      expect(found.affectedRouteIds).toEqual(['ic3']);
+      // Die Leerstrings dürfen nicht in der Antwort auftauchen.
+      expect(found.affectedStopIds).toEqual([]);
+      expect(found.affectedTripIds).toEqual([]);
+      expect(found.affectedAgencyIds).toEqual([]);
+    });
+  });
 
   describe('Verbindungssuche', () => {
     it('findet die Direktverbindung Zürich HB → Basel SBB', async () => {
